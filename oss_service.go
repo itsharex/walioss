@@ -18,8 +18,39 @@ type OSSService struct {
 // NewOSSService creates a new OSSService instance
 func NewOSSService() *OSSService {
 	homeDir, _ := os.UserHomeDir()
+
+	// Try to find ossutil in bin/ directory relative to executable
+	ossutilPath := "ossutil" // Default to PATH lookup
+
+	// Get executable directory
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+		// Check for ossutil in bin/ subdirectory
+		binPath := filepath.Join(exeDir, "bin", "ossutil")
+		if _, err := os.Stat(binPath); err == nil {
+			ossutilPath = binPath
+		}
+		// Also check in same directory as executable
+		sameDirPath := filepath.Join(exeDir, "ossutil")
+		if _, err := os.Stat(sameDirPath); err == nil {
+			ossutilPath = sameDirPath
+		}
+	}
+
+	// For development mode, check relative to working directory
+	if ossutilPath == "ossutil" {
+		cwd, err := os.Getwd()
+		if err == nil {
+			cwdBinPath := filepath.Join(cwd, "bin", "ossutil")
+			if _, err := os.Stat(cwdBinPath); err == nil {
+				ossutilPath = cwdBinPath
+			}
+		}
+	}
+
 	return &OSSService{
-		ossutilPath: "ossutil", // Default to PATH lookup
+		ossutilPath: ossutilPath,
 		configDir:   filepath.Join(homeDir, ".walioss"),
 	}
 }
