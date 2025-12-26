@@ -1,28 +1,43 @@
-import {useState} from 'react';
-import logo from './assets/images/logo-universal.png';
+import { useState } from 'react';
 import './App.css';
-import {Greet} from "../wailsjs/go/main/App";
+import Login from './pages/Login';
+import FileBrowser from './components/FileBrowser';
+import { main } from '../wailsjs/go/models';
+
+type AppView = 'login' | 'dashboard';
 
 function App() {
-    const [resultText, setResultText] = useState("Please enter your name below 👇");
-    const [name, setName] = useState('');
-    const updateName = (e: any) => setName(e.target.value);
-    const updateResultText = (result: string) => setResultText(result);
+  const [currentView, setCurrentView] = useState<AppView>('login');
+  const [currentConfig, setCurrentConfig] = useState<main.OSSConfig | null>(null);
 
-    function greet() {
-        Greet(name).then(updateResultText);
-    }
+  const handleLoginSuccess = (config: main.OSSConfig) => {
+    setCurrentConfig(config);
+    setCurrentView('dashboard');
+  };
 
-    return (
-        <div id="App">
-            <img src={logo} id="logo" alt="logo"/>
-            <div id="result" className="result">{resultText}</div>
-            <div id="input" className="input-box">
-                <input id="name" className="input" onChange={updateName} autoComplete="off" name="input" type="text"/>
-                <button className="btn" onClick={greet}>Greet</button>
-            </div>
+  const handleLogout = () => {
+    setCurrentConfig(null);
+    setCurrentView('login');
+  };
+
+  if (currentView === 'login') {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  return (
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <h1>Walioss</h1>
+        <div className="header-info">
+          <span>Region: {currentConfig?.region}</span>
+          <button className="btn-logout" onClick={handleLogout}>Logout</button>
         </div>
-    )
+      </header>
+      <main className="dashboard-main">
+        {currentConfig && <FileBrowser config={currentConfig} />}
+      </main>
+    </div>
+  );
 }
 
-export default App
+export default App;

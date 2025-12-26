@@ -1,0 +1,375 @@
+import { useState, useEffect, useRef } from 'react';
+import { main } from '../../wailsjs/go/models';
+import { ListBuckets, ListObjects, UploadFile, DownloadFile, DeleteObject } from '../../wailsjs/go/main/OSSService';
+import { SelectFile, SelectSaveFile } from '../../wailsjs/go/main/App';
+import ConfirmationModal from './ConfirmationModal';
+import './FileBrowser.css';
+import './Modal.css';
+
+interface FileBrowserProps {
+  config: main.OSSConfig;
+}
+
+interface ContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  object: main.ObjectInfo | null;
+}
+
+function FileBrowser({ config }: FileBrowserProps) {
+  const [currentBucket, setCurrentBucket] = useState('');
+  const [currentPrefix, setCurrentPrefix] = useState('');
+  
+  const [buckets, setBuckets] = useState<main.BucketInfo[]>([]);
+  const [objects, setObjects] = useState<main.ObjectInfo[]>([]);
+  
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, object: null });
+  
+  // Modal State
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [operationLoading, setOperationLoading] = useState(false);
+
+  // Load buckets on mount
+  useEffect(() => {
+    loadBuckets();
+  }, [config]); 
+
+  // Close context menu on click elsewhere
+  useEffect(() => {
+    const handleClick = () => setContextMenu({ ...contextMenu, visible: false });
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [contextMenu]);
+
+  const loadBuckets = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await ListBuckets(config);
+      setBuckets(result || []);
+    } catch (err: any) {
+      setError(err.message || "Failed to list buckets");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadObjects = async (bucket: string, prefix: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await ListObjects(config, bucket, prefix);
+      setObjects(result || []);
+    } catch (err: any) {
+      setError(err.message || "Failed to list objects");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBucketClick = (bucketName: string) => {
+    setCurrentBucket(bucketName);
+    setCurrentPrefix('');
+    loadObjects(bucketName, '');
+  };
+
+  const handleFolderClick = (folderName: string) => {
+    const newPrefix = currentPrefix + folderName + '/';
+    setCurrentPrefix(newPrefix);
+    loadObjects(currentBucket, newPrefix);
+  };
+
+  const handleBack = () => {
+    if (!currentBucket) return;
+    
+    if (currentPrefix === '') {
+      setCurrentBucket('');
+      setObjects([]);
+      loadBuckets(); 
+    } else {
+      const parts = currentPrefix.split('/').filter(p => p);
+      parts.pop();
+      const newPrefix = parts.length > 0 ? parts.join('/') + '/' : '';
+      setCurrentPrefix(newPrefix);
+      loadObjects(currentBucket, newPrefix);
+    }
+  };
+
+  const handleBreadcrumbClick = (index: number) => {
+      if (index === -1) {
+          setCurrentBucket('');
+          setCurrentPrefix('');
+          loadBuckets();
+          return;
+      }
+      
+      if (index === 0) {
+          setCurrentPrefix('');
+          loadObjects(currentBucket, '');
+          return;
+      }
+      
+      const parts = currentPrefix.split('/').filter(p => p);
+      const newParts = parts.slice(0, index);
+      const newPrefix = newParts.join('/') + '/';
+      setCurrentPrefix(newPrefix);
+      loadObjects(currentBucket, newPrefix);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, obj: main.ObjectInfo) => {
+    e.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: e.pageX,
+      y: e.pageY,
+      object: obj,
+    });
+  };
+
+  const handleUpload = async () => {
+    try {
+      const file = await SelectFile();
+      if (!file) return;
+
+      setLoading(true); // Show global loading or toast
+      await UploadFile(config, currentBucket, currentPrefix, file);
+      await loadObjects(currentBucket, currentPrefix); // Refresh
+    } catch (err: any) {
+      setError(err.message || "Upload failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    const obj = contextMenu.object;
+    if (!obj || obj.type === 'Folder') return;
+
+    try {
+      const savePath = await SelectSaveFile(obj.name);
+      if (!savePath) return;
+
+      setOperationLoading(true);
+      // We pass the relative path (obj.name) if it's in root, but obj.name is just display name?
+      // Wait, ListObjects returns Name as display name.
+      // We need the key relative to bucket.
+      // In ListObjects implementation:
+      // Name: displayName (e.g. "file.txt" inside "folder/")
+      // But we need "folder/file.txt" for download.
+      // Ah, wait. In `oss_service.go`, `DownloadFile` takes `object`.
+      // My `ListObjects` implementation returns `ObjectInfo` where `Name` is the display name (relative to prefix).
+      // But `Path` is full oss path "oss://bucket/prefix/name".
+      
+      // Let's rely on `Path` but trim `oss://bucket/`.
+      const fullKey = obj.path.substring(`oss://${currentBucket}/`.length);
+
+      await DownloadFile(config, currentBucket, fullKey, savePath);
+    } catch (err: any) {
+      alert("Download failed: " + err.message);
+    } finally {
+      setOperationLoading(false);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    const obj = contextMenu.object;
+    if (!obj) return;
+
+    setOperationLoading(true);
+    try {
+      // Construct key from Path
+       const fullKey = obj.path.substring(`oss://${currentBucket}/`.length);
+       
+      await DeleteObject(config, currentBucket, fullKey);
+      setDeleteModalOpen(false);
+      loadObjects(currentBucket, currentPrefix); // Refresh
+    } catch (err: any) {
+      alert("Delete failed: " + err.message);
+    } finally {
+      setOperationLoading(false);
+    }
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const renderBreadcrumbs = () => {
+    const crumbs = [];
+    crumbs.push(
+      <span key="root" className={`crumb ${!currentBucket ? 'active' : ''}`} onClick={() => handleBreadcrumbClick(-1)}>
+        All Buckets
+      </span>
+    );
+
+    if (currentBucket) {
+      crumbs.push(<span key="sep-root" className="separator">/</span>);
+      crumbs.push(
+        <span key="bucket" className={`crumb ${!currentPrefix ? 'active' : ''}`} onClick={() => handleBreadcrumbClick(0)}>
+          {currentBucket}
+        </span>
+      );
+
+      if (currentPrefix) {
+        const parts = currentPrefix.split('/').filter(p => p);
+        parts.forEach((part, index) => {
+          crumbs.push(<span key={`sep-${index}`} className="separator">/</span>);
+          const isLast = index === parts.length - 1;
+          crumbs.push(
+            <span 
+                key={`part-${index}`} 
+                className={`crumb ${isLast ? 'active' : ''}`}
+                onClick={() => !isLast && handleBreadcrumbClick(index + 1)}
+            >
+              {part}
+            </span>
+          );
+        });
+      }
+    }
+    return crumbs;
+  };
+
+  return (
+    <div className="file-browser">
+      <div className="browser-header">
+        <div className="nav-controls">
+          <button className="nav-btn" onClick={handleBack} disabled={!currentBucket} title="Go Back">←</button>
+          <button className="nav-btn" onClick={() => loadObjects(currentBucket, currentPrefix)} disabled={!currentBucket} title="Refresh">↻</button>
+          <button className="nav-btn" onClick={handleUpload} disabled={!currentBucket} title="Upload File">↑ Upload</button>
+        </div>
+        <div className="breadcrumbs">
+          {renderBreadcrumbs()}
+        </div>
+      </div>
+
+      <div className="browser-content">
+        {loading ? (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>Loading...</p>
+          </div>
+        ) : error ? (
+           <div className="empty-state">
+             <span className="empty-icon">⚠</span>
+             <p>{error}</p>
+             <button className="btn btn-secondary" onClick={() => currentBucket ? loadObjects(currentBucket, currentPrefix) : loadBuckets()}>Retry</button>
+           </div>
+        ) : !currentBucket ? (
+            <div className={`bucket-grid ${buckets.length === 0 ? 'empty' : ''}`}>
+              {buckets.length === 0 ? (
+                <div className="empty-state">
+                    <span className="empty-icon">🪣</span>
+                    <p>No buckets found.</p>
+                </div>
+              ) : (
+                buckets.map(bucket => (
+                    <div key={bucket.name} className="bucket-item" onClick={() => handleBucketClick(bucket.name)}>
+                    <div className="bucket-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M4 10h16v10a2 2 0 01-2 2H6a2 2 0 01-2-2V10zm2-4h12l-2-4H8L6 6z"/>
+                        </svg>
+                    </div>
+                    <div className="bucket-name">{bucket.name}</div>
+                    <div className="bucket-info">
+                        <span>{bucket.region}</span>
+                        <span>{bucket.creationDate}</span>
+                    </div>
+                    </div>
+                ))
+              )}
+            </div>
+        ) : (
+          objects.length === 0 ? (
+             <div className="empty-state">
+                <span className="empty-icon">📂</span>
+                <p>Folder is empty.</p>
+             </div>
+          ) : (
+            <div className="file-table-container">
+              <table className="file-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Size</th>
+                    <th>Type</th>
+                    <th>Last Modified</th>
+                    <th>Storage Class</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {objects.map((obj, i) => (
+                    <tr 
+                      key={i} 
+                      onClick={() => obj.type === 'Folder' && handleFolderClick(obj.name)}
+                      onContextMenu={(e) => handleContextMenu(e, obj)}
+                    >
+                      <td className="file-name-cell">
+                        <div className={`file-icon ${obj.type === 'Folder' ? 'folder-icon' : 'item-icon'}`}>
+                           {obj.type === 'Folder' ? (
+                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                               <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                             </svg>
+                           ) : (
+                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                               <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                             </svg>
+                           )}
+                        </div>
+                        <span className="file-name-text">{obj.name}</span>
+                      </td>
+                      <td>{obj.type === 'File' ? formatSize(obj.size) : '-'}</td>
+                      <td>{obj.type}</td>
+                      <td>{obj.lastModified || '-'}</td>
+                      <td>{obj.storageClass || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+      </div>
+
+      {contextMenu.visible && (
+        <div 
+          className="context-menu" 
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          {contextMenu.object?.type === 'File' && (
+             <div className="context-menu-item" onClick={handleDownload}>
+               Download
+             </div>
+          )}
+          <div className="context-menu-item danger" onClick={handleDeleteClick}>
+            Delete
+          </div>
+        </div>
+      )}
+
+      <ConfirmationModal
+        isOpen={deleteModalOpen}
+        title="Delete Object"
+        description={`Are you sure you want to delete "${contextMenu.object?.name}"?`}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteModalOpen(false)}
+        isLoading={operationLoading}
+      />
+    </div>
+  );
+}
+
+export default FileBrowser;
