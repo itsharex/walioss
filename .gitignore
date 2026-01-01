@@ -3,3 +3,5 @@ bin
 TODOs.md
 frontend/dist
 frontend/node_modules
+
+.vscode
