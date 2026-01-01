@@ -3,5 +3,7 @@ bin
 TODOs.md
 frontend/dist
 frontend/node_modules
+pnpm-lock.yaml
 
 .vscode
+.claude
