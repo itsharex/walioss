@@ -273,6 +273,9 @@ func (s *OSSService) ListBuckets(config OSSConfig) ([]BucketInfo, error) {
 		"--region", region,
 	}
 
+	// Make bucket output stable and easy to parse (one bucket per line: oss://bucket-name).
+	args = append(args, "--short-format")
+
 	if endpoint != "" {
 		args = append(args, "--endpoint", endpoint)
 	}
@@ -293,17 +296,30 @@ func (s *OSSService) parseBucketList(output string) []BucketInfo {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "oss://") {
-			// Parse bucket line: oss://bucket-name
-			parts := strings.Fields(line)
-			if len(parts) >= 1 {
-				name := strings.TrimPrefix(parts[0], "oss://")
-				bucket := BucketInfo{
-					Name: name,
-				}
-				buckets = append(buckets, bucket)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "CreationTime") || strings.HasPrefix(line, "Bucket Number") {
+			continue
+		}
+
+		// Support both short format (line starts with oss://) and long format (oss:// appears at the end).
+		fields := strings.Fields(line)
+		var bucketURL string
+		for _, f := range fields {
+			if strings.HasPrefix(f, "oss://") {
+				bucketURL = f
+				break
 			}
 		}
+		if bucketURL == "" {
+			continue
+		}
+		name := strings.TrimPrefix(bucketURL, "oss://")
+		if name == "" {
+			continue
+		}
+		buckets = append(buckets, BucketInfo{Name: name})
 	}
 
 	return buckets
