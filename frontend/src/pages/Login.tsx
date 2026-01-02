@@ -236,6 +236,12 @@ function Login({ onLoginSuccess }: LoginProps) {
                 value={endpoint}
                 onChange={(e) => setEndpoint(e.target.value)}
               />
+              {endpoint.toLowerCase().includes('oss-accesspoint') && (
+                <div className="form-hint" style={{ marginTop: '6px', opacity: 0.85, fontSize: '12px' }}>
+                  Tip: Access Point endpoints (…oss-accesspoint…) are bucket-scoped and cannot list buckets.
+                  Leave Endpoint empty or use a service endpoint like <code>oss-cn-hangzhou.aliyuncs.com</code>.
+                </div>
+              )}
             </div>
           </div>
 

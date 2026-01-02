@@ -3,11 +3,54 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
+
+func normalizeRegion(region string) string {
+	region = strings.TrimSpace(region)
+	region = strings.TrimPrefix(region, "oss-")
+	return region
+}
+
+func normalizeEndpoint(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+
+	// If user pasted a full URL, keep only host.
+	if strings.Contains(endpoint, "://") {
+		if u, err := url.Parse(endpoint); err == nil {
+			if u.Host != "" {
+				endpoint = u.Host
+			}
+		}
+	}
+
+	// Strip path/query fragments if still present.
+	endpoint = strings.SplitN(endpoint, "?", 2)[0]
+	endpoint = strings.SplitN(endpoint, "#", 2)[0]
+	endpoint = strings.SplitN(endpoint, "/", 2)[0]
+	endpoint = strings.TrimSuffix(endpoint, ".")
+	return endpoint
+}
+
+func isAccessPointEndpoint(endpoint string) bool {
+	endpoint = strings.ToLower(endpoint)
+	return strings.Contains(endpoint, ".oss-accesspoint.")
+}
+
+func suggestServiceEndpoint(region string) string {
+	region = normalizeRegion(region)
+	if region == "" {
+		return ""
+	}
+	return fmt.Sprintf("oss-%s.aliyuncs.com", region)
+}
 
 // OSSService handles OSS operations via ossutil
 type OSSService struct {
@@ -67,16 +110,30 @@ func (s *OSSService) GetOssutilPath() string {
 
 // TestConnection tests the OSS connection with given config
 func (s *OSSService) TestConnection(config OSSConfig) ConnectionResult {
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
+
+	if endpoint != "" && isAccessPointEndpoint(endpoint) {
+		return ConnectionResult{
+			Success: false,
+			Message: fmt.Sprintf(
+				"Connection test failed: endpoint looks like an OSS Access Point (bucket-scoped), but listing buckets requires a service endpoint.\n"+
+					"Please leave Endpoint empty or use something like: %s",
+				suggestServiceEndpoint(region),
+			),
+		}
+	}
+
 	// Build ossutil command with credentials
 	args := []string{
 		"ls",
 		"--access-key-id", config.AccessKeyID,
 		"--access-key-secret", config.AccessKeySecret,
-		"--region", config.Region,
+		"--region", region,
 	}
 
-	if config.Endpoint != "" {
-		args = append(args, "--endpoint", config.Endpoint)
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
 	}
 
 	cmd := exec.Command(s.ossutilPath, args...)
@@ -199,15 +256,25 @@ func (s *OSSService) GetDefaultProfile() (*OSSProfile, error) {
 
 // ListBuckets lists all buckets for the given config
 func (s *OSSService) ListBuckets(config OSSConfig) ([]BucketInfo, error) {
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
+
+	if endpoint != "" && isAccessPointEndpoint(endpoint) {
+		return nil, fmt.Errorf(
+			"failed to list buckets: Endpoint appears to be an OSS Access Point (bucket-scoped). Listing buckets must use a service endpoint. Leave Endpoint empty or set it to something like %s",
+			suggestServiceEndpoint(region),
+		)
+	}
+
 	args := []string{
 		"ls",
 		"--access-key-id", config.AccessKeyID,
 		"--access-key-secret", config.AccessKeySecret,
-		"--region", config.Region,
+		"--region", region,
 	}
 
-	if config.Endpoint != "" {
-		args = append(args, "--endpoint", config.Endpoint)
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
 	}
 
 	cmd := exec.Command(s.ossutilPath, args...)
@@ -245,17 +312,19 @@ func (s *OSSService) parseBucketList(output string) []BucketInfo {
 // ListObjects lists objects in a bucket with optional prefix
 func (s *OSSService) ListObjects(config OSSConfig, bucketName string, prefix string) ([]ObjectInfo, error) {
 	bucketUrl := fmt.Sprintf("oss://%s/%s", bucketName, prefix)
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
 
 	args := []string{
 		"ls",
 		bucketUrl,
 		"--access-key-id", config.AccessKeyID,
 		"--access-key-secret", config.AccessKeySecret,
-		"--region", config.Region,
+		"--region", region,
 	}
 
-	if config.Endpoint != "" {
-		args = append(args, "--endpoint", config.Endpoint)
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
 	}
 
 	// Use directory mode to simulate folder structure
@@ -358,6 +427,8 @@ func (s *OSSService) parseObjectList(output string, bucketName string, prefix st
 // DownloadFile downloads a file from OSS
 func (s *OSSService) DownloadFile(config OSSConfig, bucket string, object string, localPath string) error {
 	cloudUrl := fmt.Sprintf("oss://%s/%s", bucket, object)
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
 
 	args := []string{
 		"cp",
@@ -365,12 +436,12 @@ func (s *OSSService) DownloadFile(config OSSConfig, bucket string, object string
 		localPath,
 		"--access-key-id", config.AccessKeyID,
 		"--access-key-secret", config.AccessKeySecret,
-		"--region", config.Region,
+		"--region", region,
 		"-f", // Force overwrite
 	}
 
-	if config.Endpoint != "" {
-		args = append(args, "--endpoint", config.Endpoint)
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
 	}
 
 	cmd := exec.Command(s.ossutilPath, args...)
@@ -387,6 +458,8 @@ func (s *OSSService) DownloadFile(config OSSConfig, bucket string, object string
 func (s *OSSService) UploadFile(config OSSConfig, bucket string, prefix string, localPath string) error {
 	fileName := filepath.Base(localPath)
 	cloudUrl := fmt.Sprintf("oss://%s/%s%s", bucket, prefix, fileName)
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
 
 	args := []string{
 		"cp",
@@ -394,12 +467,12 @@ func (s *OSSService) UploadFile(config OSSConfig, bucket string, prefix string, 
 		cloudUrl,
 		"--access-key-id", config.AccessKeyID,
 		"--access-key-secret", config.AccessKeySecret,
-		"--region", config.Region,
+		"--region", region,
 		"-f", // Force overwrite
 	}
 
-	if config.Endpoint != "" {
-		args = append(args, "--endpoint", config.Endpoint)
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
 	}
 
 	cmd := exec.Command(s.ossutilPath, args...)
@@ -415,13 +488,15 @@ func (s *OSSService) UploadFile(config OSSConfig, bucket string, prefix string, 
 // DeleteObject deletes an object from OSS
 func (s *OSSService) DeleteObject(config OSSConfig, bucket string, object string) error {
 	cloudUrl := fmt.Sprintf("oss://%s/%s", bucket, object)
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
 
 	args := []string{
 		"rm",
 		cloudUrl,
 		"--access-key-id", config.AccessKeyID,
 		"--access-key-secret", config.AccessKeySecret,
-		"--region", config.Region,
+		"--region", region,
 		"-f", // Force delete without confirmation prompt (since we handle it in UI)
 	}
 
@@ -430,8 +505,8 @@ func (s *OSSService) DeleteObject(config OSSConfig, bucket string, object string
 		args = append(args, "-r")
 	}
 
-	if config.Endpoint != "" {
-		args = append(args, "--endpoint", config.Endpoint)
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
 	}
 
 	cmd := exec.Command(s.ossutilPath, args...)
