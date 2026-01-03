@@ -77,8 +77,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 0 16px;
+    gap: 6px;
+    padding: 0 10px;
     overflow-x: auto;
     scrollbar-width: thin;
 }
@@ -87,7 +87,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 8px 10px;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);

@@ -89,6 +89,32 @@ function App() {
     setTabs((prev) => prev.filter((t) => t.id !== tabId));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (!isCmdOrCtrl) return;
+
+      // Cmd/Ctrl + T: new tab
+      if (e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        addTab();
+      }
+
+      // Cmd/Ctrl + W: close active tab
+      if (e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        if (activeTabId) {
+          closeTab(activeTabId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeTabId, addTab, closeTab]);
+
   return (
     <>
       <TitlebarDrag />
