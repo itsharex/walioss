@@ -6,6 +6,7 @@
   "frontend:build": "pnpm run build",
   "frontend:dev:watcher": "pnpm run dev",
   "frontend:dev:serverUrl": "auto",
+  "icon": "frontend/public/icon_alpha.png",
   "author": {
     "name": "L1ght",
     "email": "2504082957@qq.com"
