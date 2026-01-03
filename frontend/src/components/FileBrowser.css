@@ -9,6 +9,104 @@
     color: #ffffff;
 }
 
+.bookmark-bar {
+    padding: 12px 24px 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.bookmark-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bookmark-title {
+    font-size: 13px;
+    letter-spacing: 0.3px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.bookmark-btn {
+    background: rgba(79, 172, 254, 0.15);
+    border: 1px solid rgba(79, 172, 254, 0.35);
+    color: #7dd3fc;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bookmark-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.bookmark-btn:not(:disabled):hover {
+    background: rgba(79, 172, 254, 0.25);
+    color: #bfe7ff;
+}
+
+.bookmark-hint {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.bookmark-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 30px;
+}
+
+.bookmark-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 6px 8px;
+}
+
+.bookmark-chip-label {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.bookmark-chip-label:hover {
+    text-decoration: underline;
+}
+
+.bookmark-chip-remove {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.bookmark-chip-remove:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.bookmark-empty {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+}
+
 /* Browser Header */
 .browser-header {
     padding: 16px 24px;
@@ -210,6 +308,27 @@
     font-weight: 500;
 }
 
+.file-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.link-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.link-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
 /* Loading State */
 .loading-container {
     display: flex;
@@ -328,4 +447,52 @@ body.theme-light .file-browser .loading-spinner {
 
 body.theme-light .file-browser .empty-state {
     color: rgba(15, 23, 42, 0.45);
+}
+
+body.theme-light .file-browser .link-btn {
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    color: #0f172a;
+}
+
+body.theme-light .file-browser .link-btn:hover {
+    background: rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .file-browser .bookmark-bar {
+    background: rgba(255, 255, 255, 0.85);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .file-browser .bookmark-title {
+    color: rgba(15, 23, 42, 0.65);
+}
+
+body.theme-light .file-browser .bookmark-btn {
+    background: rgba(79, 172, 254, 0.15);
+    border: 1px solid rgba(79, 172, 254, 0.35);
+    color: #0369a1;
+}
+
+body.theme-light .file-browser .bookmark-hint {
+    color: rgba(15, 23, 42, 0.5);
+}
+
+body.theme-light .file-browser .bookmark-chip {
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+body.theme-light .file-browser .bookmark-chip-label {
+    color: #0f172a;
+}
+
+body.theme-light .file-browser .bookmark-chip-remove {
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    color: rgba(15, 23, 42, 0.65);
+}
+
+body.theme-light .file-browser .bookmark-empty {
+    color: rgba(15, 23, 42, 0.5);
 }

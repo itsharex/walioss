@@ -6,9 +6,21 @@ import ConfirmationModal from './ConfirmationModal';
 import './FileBrowser.css';
 import './Modal.css';
 
+type TransferStatus = 'in-progress' | 'success' | 'error';
+
 interface FileBrowserProps {
   config: main.OSSConfig;
+  profileName: string | null;
+  onTransferStart?: (payload: { name: string; type: 'upload' | 'download'; bucket: string; key: string; status?: TransferStatus }) => string;
+  onTransferFinish?: (id: string, status: TransferStatus, message?: string) => void;
 }
+
+type Bookmark = {
+  id: string;
+  bucket: string;
+  prefix: string;
+  label: string;
+};
 
 interface ContextMenuState {
   visible: boolean;
@@ -17,12 +29,13 @@ interface ContextMenuState {
   object: main.ObjectInfo | null;
 }
 
-function FileBrowser({ config }: FileBrowserProps) {
+function FileBrowser({ config, profileName, onTransferStart, onTransferFinish }: FileBrowserProps) {
   const [currentBucket, setCurrentBucket] = useState('');
   const [currentPrefix, setCurrentPrefix] = useState('');
   
   const [buckets, setBuckets] = useState<main.BucketInfo[]>([]);
   const [objects, setObjects] = useState<main.ObjectInfo[]>([]);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,10 +47,34 @@ function FileBrowser({ config }: FileBrowserProps) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [operationLoading, setOperationLoading] = useState(false);
 
+  const storageKey = profileName ? `oss-bookmarks:${profileName}` : null;
+
+  const loadBookmarks = () => {
+    if (!storageKey) {
+      setBookmarks([]);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(storageKey);
+      setBookmarks(raw ? JSON.parse(raw) : []);
+    } catch {
+      setBookmarks([]);
+    }
+  };
+
+  const persistBookmarks = (items: Bookmark[]) => {
+    if (!storageKey) return;
+    localStorage.setItem(storageKey, JSON.stringify(items));
+  };
+
   // Load buckets on mount
   useEffect(() => {
     loadBuckets();
   }, [config]); 
+
+  useEffect(() => {
+    loadBookmarks();
+  }, [storageKey]);
 
   // Close context menu on click elsewhere
   useEffect(() => {
@@ -129,6 +166,43 @@ function FileBrowser({ config }: FileBrowserProps) {
       loadObjects(currentBucket, newPrefix);
   };
 
+  const handleAddBookmark = () => {
+    if (!profileName || !currentBucket) return;
+
+    const normalizedPrefix = currentPrefix.endsWith('/') ? currentPrefix : currentPrefix + (currentPrefix ? '/' : '');
+    const labelSource = normalizedPrefix.replace(/\/$/, '');
+    const fallbackLabel = normalizedPrefix ? labelSource.split('/').filter(Boolean).pop() : currentBucket;
+    const label = fallbackLabel || currentBucket;
+
+    const newBookmark: Bookmark = {
+      id: `bm-${Date.now()}`,
+      bucket: currentBucket,
+      prefix: normalizedPrefix,
+      label,
+    };
+
+    setBookmarks((prev) => {
+      const exists = prev.some((b) => b.bucket === newBookmark.bucket && b.prefix === newBookmark.prefix);
+      const updated = exists ? prev : [...prev, newBookmark];
+      persistBookmarks(updated);
+      return updated;
+    });
+  };
+
+  const handleBookmarkClick = (bookmark: Bookmark) => {
+    setCurrentBucket(bookmark.bucket);
+    setCurrentPrefix(bookmark.prefix);
+    loadObjects(bookmark.bucket, bookmark.prefix);
+  };
+
+  const handleRemoveBookmark = (id: string) => {
+    setBookmarks((prev) => {
+      const updated = prev.filter((b) => b.id !== id);
+      persistBookmarks(updated);
+      return updated;
+    });
+  };
+
   const handleContextMenu = (e: React.MouseEvent, obj: main.ObjectInfo) => {
     e.preventDefault();
     setContextMenu({
@@ -140,29 +214,51 @@ function FileBrowser({ config }: FileBrowserProps) {
   };
 
   const handleUpload = async () => {
+    let transferId: string | undefined;
     try {
-      const file = await SelectFile();
-      if (!file) return;
+      const filePath = await SelectFile();
+      if (!filePath) return;
+
+      const fileName = filePath.split(/[/\\]/).pop() || 'file';
 
       setLoading(true); // Show global loading or toast
-      await UploadFile(config, currentBucket, currentPrefix, file);
+      transferId = onTransferStart?.({
+        name: fileName,
+        type: 'upload',
+        bucket: currentBucket,
+        key: `${currentPrefix}${fileName}`,
+      });
+
+      await UploadFile(config, currentBucket, currentPrefix, filePath);
+      transferId && onTransferFinish?.(transferId, 'success');
       await loadObjects(currentBucket, currentPrefix); // Refresh
     } catch (err: any) {
-      setError(err.message || "Upload failed");
+      if (transferId) {
+        onTransferFinish?.(transferId, 'error', err?.message || 'Upload failed');
+      }
+      setError(err?.message || "Upload failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownload = async () => {
-    const obj = contextMenu.object;
-    if (!obj || obj.type === 'Folder') return;
+  const handleDownload = async (target?: main.ObjectInfo) => {
+    let transferId: string | undefined;
+    const obj = target || contextMenu.object;
+    if (!obj || isFolder(obj) || !currentBucket) return;
 
     try {
       const savePath = await SelectSaveFile(obj.name);
       if (!savePath) return;
 
       setOperationLoading(true);
+      const fullKey = obj.path.substring(`oss://${currentBucket}/`.length);
+      transferId = onTransferStart?.({
+        name: obj.name,
+        type: 'download',
+        bucket: currentBucket,
+        key: fullKey,
+      });
       // We pass the relative path (obj.name) if it's in root, but obj.name is just display name?
       // Wait, ListObjects returns Name as display name.
       // We need the key relative to bucket.
@@ -174,10 +270,13 @@ function FileBrowser({ config }: FileBrowserProps) {
       // But `Path` is full oss path "oss://bucket/prefix/name".
       
       // Let's rely on `Path` but trim `oss://bucket/`.
-      const fullKey = obj.path.substring(`oss://${currentBucket}/`.length);
 
       await DownloadFile(config, currentBucket, fullKey, savePath);
+      transferId && onTransferFinish?.(transferId, 'success');
     } catch (err: any) {
+      if (transferId) {
+        onTransferFinish?.(transferId, 'error', err?.message || 'Download failed');
+      }
       alert("Download failed: " + err.message);
     } finally {
       setOperationLoading(false);
@@ -213,6 +312,38 @@ function FileBrowser({ config }: FileBrowserProps) {
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const isFolder = (obj: main.ObjectInfo) => obj.type === 'Folder' || obj.path.endsWith('/') || obj.name.endsWith('/');
+
+  const guessType = (name: string, fallback: string) => {
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    const map: Record<string, string> = {
+      mp4: 'Video',
+      mov: 'Video',
+      mkv: 'Video',
+      wav: 'Audio',
+      mp3: 'Audio',
+      flac: 'Audio',
+      png: 'Image',
+      jpg: 'Image',
+      jpeg: 'Image',
+      gif: 'Image',
+      webp: 'Image',
+      pdf: 'Document',
+      txt: 'Text',
+      json: 'JSON',
+      csv: 'CSV',
+      zip: 'Archive',
+      rar: 'Archive',
+      gz: 'Archive',
+    };
+    return map[ext] || fallback;
+  };
+
+  const displayType = (obj: main.ObjectInfo) => {
+    if (isFolder(obj)) return 'Folder';
+    return guessType(obj.name, obj.type || 'File');
   };
 
   const renderBreadcrumbs = () => {
@@ -253,6 +384,36 @@ function FileBrowser({ config }: FileBrowserProps) {
 
   return (
     <div className="file-browser">
+      <div className="bookmark-bar">
+        <div className="bookmark-actions">
+          <div className="bookmark-title">Bookmarks</div>
+          <button
+            className="bookmark-btn"
+            onClick={handleAddBookmark}
+            disabled={!currentBucket || !profileName}
+            title={profileName ? 'Save current path' : 'Save connection as profile to enable bookmarks'}
+          >
+            + Add
+          </button>
+          {!profileName && <span className="bookmark-hint">保存书签需要已保存的配置</span>}
+        </div>
+        <div className="bookmark-list">
+          {bookmarks.length === 0 ? (
+            <span className="bookmark-empty">No bookmarks yet</span>
+          ) : (
+            bookmarks.map((bm) => (
+              <div key={bm.id} className="bookmark-chip">
+                <button className="bookmark-chip-label" onClick={() => handleBookmarkClick(bm)} title={`${bm.bucket}/${bm.prefix}`}>
+                  {bm.label}
+                </button>
+                <button className="bookmark-chip-remove" onClick={() => handleRemoveBookmark(bm.id)} title="Remove bookmark">
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
       <div className="browser-header">
         <div className="nav-controls">
           <button className="nav-btn" onClick={handleBack} disabled={!currentBucket} title="Go Back">←</button>
@@ -316,18 +477,19 @@ function FileBrowser({ config }: FileBrowserProps) {
                     <th>Type</th>
                     <th>Last Modified</th>
                     <th>Storage Class</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {objects.map((obj, i) => (
+                  {objects.map((obj) => (
                     <tr 
-                      key={i} 
-                      onClick={() => obj.type === 'Folder' && handleFolderClick(obj.name)}
+                      key={obj.path || obj.name} 
+                      onClick={() => isFolder(obj) && handleFolderClick(obj.name)}
                       onContextMenu={(e) => handleContextMenu(e, obj)}
                     >
                       <td className="file-name-cell">
-                        <div className={`file-icon ${obj.type === 'Folder' ? 'folder-icon' : 'item-icon'}`}>
-                           {obj.type === 'Folder' ? (
+                        <div className={`file-icon ${isFolder(obj) ? 'folder-icon' : 'item-icon'}`}>
+                           {isFolder(obj) ? (
                              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
                              </svg>
@@ -339,10 +501,33 @@ function FileBrowser({ config }: FileBrowserProps) {
                         </div>
                         <span className="file-name-text">{obj.name}</span>
                       </td>
-                      <td>{obj.type === 'File' ? formatSize(obj.size) : '-'}</td>
-                      <td>{obj.type}</td>
+                      <td>{!isFolder(obj) ? formatSize(obj.size) : '-'}</td>
+                      <td>{displayType(obj)}</td>
                       <td>{obj.lastModified || '-'}</td>
                       <td>{obj.storageClass || '-'}</td>
+                      <td className="file-actions">
+                        {isFolder(obj) ? (
+                          <button
+                            className="link-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFolderClick(obj.name);
+                            }}
+                          >
+                            Open
+                          </button>
+                        ) : (
+                          <button
+                            className="link-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(obj);
+                            }}
+                          >
+                            Download
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -355,10 +540,10 @@ function FileBrowser({ config }: FileBrowserProps) {
       {contextMenu.visible && (
         <div 
           className="context-menu" 
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-        >
-          {contextMenu.object?.type === 'File' && (
-             <div className="context-menu-item" onClick={handleDownload}>
+      style={{ top: contextMenu.y, left: contextMenu.x }}
+    >
+          {contextMenu.object && !isFolder(contextMenu.object) && (
+             <div className="context-menu-item" onClick={() => handleDownload()}>
                Download
              </div>
           )}

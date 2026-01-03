@@ -13,12 +13,26 @@ type AppTab = {
   title: string;
 };
 
+type TransferStatus = 'in-progress' | 'success' | 'error';
+type TransferType = 'upload' | 'download';
+
+type TransferItem = {
+  id: string;
+  name: string;
+  type: TransferType;
+  bucket: string;
+  key: string;
+  status: TransferStatus;
+  message?: string;
+};
+
 function App() {
   const [globalView, setGlobalView] = useState<GlobalView>('session');
   const [theme, setTheme] = useState<string>('dark');
   const nextTabNumber = useRef(2);
 
   const [sessionConfig, setSessionConfig] = useState<main.OSSConfig | null>(null);
+  const [sessionProfileName, setSessionProfileName] = useState<string | null>(null);
 
   const [tabs, setTabs] = useState<AppTab[]>([
     { id: 't1', title: 'New Tab' },
@@ -26,6 +40,8 @@ function App() {
   const [activeTabId, setActiveTabId] = useState<string>('t1');
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState<string>('');
+  const [transfers, setTransfers] = useState<TransferItem[]>([]);
+  const [showTransfers, setShowTransfers] = useState<boolean>(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
@@ -57,9 +73,12 @@ function App() {
   // Titlebar drag region for macOS
   const TitlebarDrag = () => <div className="titlebar-drag" />;
 
-  const handleLoginSuccess = (config: main.OSSConfig) => {
+  const handleLoginSuccess = (config: main.OSSConfig, profileName?: string | null) => {
     setSessionConfig(config);
     setGlobalView('session');
+    setSessionProfileName(profileName || null);
+    setTransfers([]);
+    setShowTransfers(false);
   };
 
   const handleLogout = () => {
@@ -68,6 +87,9 @@ function App() {
     setTabs([{ id: 't1', title: 'New Tab' }]);
     setActiveTabId('t1');
     nextTabNumber.current = 2;
+    setSessionProfileName(null);
+    setTransfers([]);
+    setShowTransfers(false);
   };
 
   const openTab = (tabId: string) => {
@@ -98,6 +120,16 @@ function App() {
     const title = renameValue.trim() || 'New Tab';
     setTabs((prev) => prev.map((t) => (t.id === renamingTabId ? { ...t, title } : t)));
     cancelRename();
+  };
+
+  const startTransfer = (payload: Omit<TransferItem, 'id' | 'status'> & { status?: TransferStatus }) => {
+    const id = `tr-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setTransfers((prev) => [{ ...payload, id, status: payload.status ?? 'in-progress' }, ...prev]);
+    return id;
+  };
+
+  const finishTransfer = (id: string, status: TransferStatus, message?: string) => {
+    setTransfers((prev) => prev.map((t) => (t.id === id ? { ...t, status, message } : t)));
   };
 
   const closeTab = (tabId: string) => {
@@ -149,6 +181,8 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [activeTabId, tabs]);
+
+  const inProgressCount = transfers.filter((t) => t.status === 'in-progress').length;
 
   return (
     <>
@@ -219,6 +253,46 @@ function App() {
             )}
           </div>
           <div className="header-info">
+            {sessionConfig && (
+              <div className="transfer-toggle">
+                <button
+                  className="transfer-btn"
+                  type="button"
+                  onClick={() => setShowTransfers((v) => !v)}
+                  title="传输进度"
+                >
+                  ⇅
+                  {inProgressCount > 0 && <span className="transfer-badge">{inProgressCount}</span>}
+                </button>
+                {showTransfers && (
+                  <div className="transfer-panel">
+                    <h4>传输队列</h4>
+                    {transfers.length === 0 ? (
+                      <div className="transfer-empty">暂无传输</div>
+                    ) : (
+                      <div className="transfer-list">
+                        {transfers.map((t) => (
+                          <div key={t.id} className="transfer-item">
+                            <div className="transfer-top">
+                              <span>{t.type === 'upload' ? '↑ 上传' : '↓ 下载'} · {t.name}</span>
+                              <span className={`status-pill ${t.status}`}>
+                                {t.status === 'in-progress' && '进行中'}
+                                {t.status === 'success' && '完成'}
+                                {t.status === 'error' && '失败'}
+                              </span>
+                            </div>
+                            <div className="transfer-meta">
+                              {t.bucket}/{t.key}
+                              {t.message && ` · ${t.message}`}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             <span>Region: {sessionConfig?.region || '-'}</span>
             <button className="btn-settings" onClick={() => setGlobalView('settings')}>Settings</button>
             {sessionConfig && <button className="btn-logout" onClick={handleLogout}>Logout</button>}
@@ -233,7 +307,12 @@ function App() {
             <div className="window-stack">
               {tabs.map((t) => (
                 <div key={t.id} className={`window-panel ${t.id === activeTabId ? 'active' : ''}`}>
-                  <FileBrowser config={sessionConfig} />
+                  <FileBrowser
+                    config={sessionConfig}
+                    profileName={sessionProfileName}
+                    onTransferStart={startTransfer}
+                    onTransferFinish={finishTransfer}
+                  />
                 </div>
               ))}
             </div>

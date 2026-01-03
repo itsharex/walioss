@@ -4,7 +4,7 @@ import { TestConnection, LoadProfiles, SaveProfile, GetDefaultProfile, CheckOssu
 import { main } from '../../wailsjs/go/models';
 
 interface LoginProps {
-  onLoginSuccess: (config: main.OSSConfig) => void;
+  onLoginSuccess: (config: main.OSSConfig, profileName?: string | null) => void;
 }
 
 function Login({ onLoginSuccess }: LoginProps) {
@@ -145,7 +145,8 @@ function Login({ onLoginSuccess }: LoginProps) {
       }
 
       // On success, notify parent
-      onLoginSuccess(config);
+      const resolvedProfileName = selectedProfile || (saveAsProfile ? profileName.trim() : '') || null;
+      onLoginSuccess(config, resolvedProfileName);
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Connection failed' });
     } finally {
