@@ -285,3 +285,62 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Theme (Light) */
+body.theme-light .login-container {
+  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #e0f2fe 100%);
+}
+
+body.theme-light .login-card {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.18);
+}
+
+body.theme-light .login-title {
+  color: #0f172a;
+}
+
+body.theme-light .login-subtitle {
+  color: rgba(15, 23, 42, 0.6);
+}
+
+body.theme-light .login-container .form-label {
+  color: rgba(15, 23, 42, 0.75);
+}
+
+body.theme-light .login-container .form-input {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+}
+
+body.theme-light .login-container .form-input::placeholder {
+  color: rgba(15, 23, 42, 0.35);
+}
+
+body.theme-light .login-container .profile-select {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+}
+
+body.theme-light .login-container .profile-select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+body.theme-light .login-container .btn-secondary {
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: rgba(15, 23, 42, 0.85);
+}
+
+body.theme-light .login-container .btn-secondary:hover {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.18);
+}
+
+body.theme-light .login-container .save-profile-section label {
+  color: rgba(15, 23, 42, 0.65);
+}

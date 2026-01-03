@@ -142,3 +142,47 @@
 .context-menu-item.danger:hover {
     background: rgba(239, 68, 68, 0.15);
 }
+
+/* Theme (Light) */
+body.theme-light .modal-overlay {
+    background: rgba(15, 23, 42, 0.35);
+}
+
+body.theme-light .modal-content {
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    box-shadow: 0 20px 50px -12px rgba(15, 23, 42, 0.25);
+}
+
+body.theme-light .modal-title {
+    color: #0f172a;
+}
+
+body.theme-light .modal-description {
+    color: rgba(15, 23, 42, 0.65);
+}
+
+body.theme-light .modal-btn-cancel {
+    background: rgba(15, 23, 42, 0.04);
+    color: rgba(15, 23, 42, 0.8);
+}
+
+body.theme-light .modal-btn-cancel:hover {
+    background: rgba(15, 23, 42, 0.06);
+    color: #0f172a;
+}
+
+body.theme-light .context-menu {
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.2);
+}
+
+body.theme-light .context-menu-item {
+    color: rgba(15, 23, 42, 0.85);
+}
+
+body.theme-light .context-menu-item:hover {
+    background: rgba(15, 23, 42, 0.06);
+    color: #0f172a;
+}

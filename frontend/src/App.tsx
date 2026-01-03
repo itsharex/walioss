@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './App.css';
 import Login from './pages/Login';
 import Settings from './pages/Settings';
 import FileBrowser from './components/FileBrowser';
 import { main } from '../wailsjs/go/models';
+import { GetSettings } from '../wailsjs/go/main/OSSService';
 
 type AppView = 'login' | 'dashboard' | 'settings';
 
@@ -24,8 +25,22 @@ function App() {
 
   const handleThemeChange = (newTheme: string) => {
     setTheme(newTheme);
-    document.body.className = newTheme === 'light' ? 'theme-light' : 'theme-dark';
+    const themeClass = newTheme === 'light' ? 'theme-light' : 'theme-dark';
+    document.body.classList.remove('theme-light', 'theme-dark');
+    document.body.classList.add(themeClass);
   };
+
+  useEffect(() => {
+    const applySavedTheme = async () => {
+      try {
+        const settings = await GetSettings();
+        handleThemeChange(settings?.theme || 'dark');
+      } catch {
+        handleThemeChange('dark');
+      }
+    };
+    applySavedTheme();
+  }, []);
 
   // Titlebar drag region for macOS
   const TitlebarDrag = () => <div className="titlebar-drag" />;

@@ -240,3 +240,87 @@
     font-size: 48px;
     opacity: 0.5;
 }
+
+/* Theme (Light) */
+body.theme-light .file-browser {
+    color: #0f172a;
+}
+
+body.theme-light .file-browser .browser-header {
+    background: rgba(255, 255, 255, 0.7);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .file-browser .nav-btn {
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    color: rgba(15, 23, 42, 0.65);
+}
+
+body.theme-light .file-browser .nav-btn:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.06);
+    color: #0f172a;
+}
+
+body.theme-light .file-browser .crumb {
+    color: rgba(15, 23, 42, 0.6);
+}
+
+body.theme-light .file-browser .crumb:hover {
+    background: rgba(15, 23, 42, 0.06);
+    color: #0f172a;
+}
+
+body.theme-light .file-browser .crumb.active {
+    color: #0f172a;
+}
+
+body.theme-light .file-browser .separator {
+    color: rgba(15, 23, 42, 0.35);
+}
+
+body.theme-light .file-browser .bucket-item {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .file-browser .bucket-item:hover {
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 24px -6px rgba(15, 23, 42, 0.18);
+}
+
+body.theme-light .file-browser .bucket-info {
+    color: rgba(15, 23, 42, 0.55);
+}
+
+body.theme-light .file-browser .file-table-container {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .file-browser .file-table th {
+    background: rgba(15, 23, 42, 0.03);
+    color: rgba(15, 23, 42, 0.65);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .file-browser .file-table td {
+    color: rgba(15, 23, 42, 0.9);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+body.theme-light .file-browser .file-table tr:hover {
+    background: rgba(15, 23, 42, 0.04);
+}
+
+body.theme-light .file-browser .loading-container {
+    color: rgba(15, 23, 42, 0.55);
+}
+
+body.theme-light .file-browser .loading-spinner {
+    border: 3px solid rgba(15, 23, 42, 0.08);
+    border-top-color: #4facfe;
+}
+
+body.theme-light .file-browser .empty-state {
+    color: rgba(15, 23, 42, 0.45);
+}

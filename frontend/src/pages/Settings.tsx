@@ -27,8 +27,18 @@ function Settings({ onBack, onThemeChange }: SettingsProps) {
     try {
       const loaded = await GetSettings();
       setSettings(loaded);
+      if (onThemeChange) {
+        onThemeChange(loaded?.theme || 'dark');
+      }
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Failed to load settings' });
+    }
+  };
+
+  const handleThemeSelect = (theme: 'dark' | 'light') => {
+    setSettings((prev) => ({ ...prev, theme }));
+    if (onThemeChange) {
+      onThemeChange(theme);
     }
   };
 
@@ -138,13 +148,13 @@ function Settings({ onBack, onThemeChange }: SettingsProps) {
             <div className="theme-toggle">
               <div 
                 className={`theme-option ${settings.theme === 'dark' ? 'active' : ''}`}
-                onClick={() => setSettings({ ...settings, theme: 'dark' })}
+                onClick={() => handleThemeSelect('dark')}
               >
                 Dark
               </div>
               <div 
                 className={`theme-option ${settings.theme === 'light' ? 'active' : ''}`}
-                onClick={() => setSettings({ ...settings, theme: 'light' })}
+                onClick={() => handleThemeSelect('light')}
               >
                 Light
               </div>
