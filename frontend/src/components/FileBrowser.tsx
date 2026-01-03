@@ -100,6 +100,14 @@ function FileBrowser({ config }: FileBrowserProps) {
     }
   };
 
+  const handleRefresh = () => {
+    if (!currentBucket) {
+      loadBuckets();
+      return;
+    }
+    loadObjects(currentBucket, currentPrefix);
+  };
+
   const handleBreadcrumbClick = (index: number) => {
       if (index === -1) {
           setCurrentBucket('');
@@ -248,7 +256,7 @@ function FileBrowser({ config }: FileBrowserProps) {
       <div className="browser-header">
         <div className="nav-controls">
           <button className="nav-btn" onClick={handleBack} disabled={!currentBucket} title="Go Back">←</button>
-          <button className="nav-btn" onClick={() => loadObjects(currentBucket, currentPrefix)} disabled={!currentBucket} title="Refresh">↻</button>
+          <button className="nav-btn" onClick={handleRefresh} disabled={loading} title="Refresh">↻</button>
           <button className="nav-btn" onClick={handleUpload} disabled={!currentBucket} title="Upload File">↑ Upload</button>
         </div>
         <div className="breadcrumbs">

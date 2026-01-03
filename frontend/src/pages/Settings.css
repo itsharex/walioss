@@ -1,9 +1,9 @@
 .settings-container {
-    min-height: 100vh;
-    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
-    padding: 40px;
-    padding-top: 60px;
-    /* Space for macOS titlebar */
+    height: 100%;
+    min-height: 0;
+    background: transparent;
+    padding: 24px;
+    overflow-y: auto;
     color: #ffffff;
 }
 
@@ -26,13 +26,6 @@
     color: rgba(255, 255, 255, 0.8);
     cursor: pointer;
     transition: all 0.2s;
-}
-
-.settings-header .back-btn {
-    position: fixed;
-    top: 40px;
-    left: max(40px, calc(50% - 300px));
-    z-index: 10000;
 }
 
 .back-btn:hover {
@@ -172,7 +165,7 @@
 
 /* Theme (Light) */
 body.theme-light .settings-container {
-    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #e0f2fe 100%);
+    background: transparent;
     color: #0f172a;
 }
 
