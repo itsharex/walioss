@@ -157,19 +157,6 @@ function Login({ onLoginSuccess }: LoginProps) {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <svg className="login-logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="64" height="64" rx="16" fill="url(#logo-gradient)"/>
-            <path d="M20 32C20 25.373 25.373 20 32 20C38.627 20 44 25.373 44 32" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-            <path d="M26 32C26 28.686 28.686 26 32 26C35.314 26 38 28.686 38 32" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-            <circle cx="32" cy="32" r="3" fill="white"/>
-            <path d="M32 35V44" stroke="white" strokeWidth="3" strokeLinecap="round"/>
-            <defs>
-              <linearGradient id="logo-gradient" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#4facfe"/>
-                <stop offset="1" stopColor="#00f2fe"/>
-              </linearGradient>
-            </defs>
-          </svg>
           <h1 className="login-title">Walioss</h1>
           <p className="login-subtitle">Connect to Alibaba Cloud OSS</p>
         </div>
