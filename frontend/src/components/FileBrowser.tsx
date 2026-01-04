@@ -47,6 +47,11 @@ function FileBrowser({ config, profileName, onTransferStart, onTransferFinish }:
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [operationLoading, setOperationLoading] = useState(false);
 
+  // Address bar edit state
+  const [addressBarEditing, setAddressBarEditing] = useState(false);
+  const [addressBarValue, setAddressBarValue] = useState('');
+  const addressInputRef = useRef<HTMLInputElement>(null);
+
   const storageKey = profileName ? `oss-bookmarks:${profileName}` : null;
 
   const loadBookmarks = () => {
@@ -164,6 +169,65 @@ function FileBrowser({ config, profileName, onTransferStart, onTransferFinish }:
       const newPrefix = newParts.join('/') + '/';
       setCurrentPrefix(newPrefix);
       loadObjects(currentBucket, newPrefix);
+  };
+
+  // Generate current OSS path
+  const getCurrentOssPath = () => {
+    if (!currentBucket) return 'oss://';
+    if (!currentPrefix) return `oss://${currentBucket}/`;
+    return `oss://${currentBucket}/${currentPrefix}`;
+  };
+
+  // Parse OSS path and navigate
+  const parseAndNavigateOssPath = (path: string) => {
+    const trimmed = path.trim();
+    
+    // Handle oss:// prefix
+    let pathToParse = trimmed;
+    if (pathToParse.startsWith('oss://')) {
+      pathToParse = pathToParse.substring(6);
+    }
+    
+    // If empty, go to bucket list
+    if (!pathToParse || pathToParse === '/') {
+      setCurrentBucket('');
+      setCurrentPrefix('');
+      loadBuckets();
+      return;
+    }
+    
+    // Split into bucket and prefix
+    const parts = pathToParse.split('/');
+    const bucket = parts[0];
+    const prefix = parts.slice(1).filter(p => p).join('/');
+    const normalizedPrefix = prefix ? prefix + '/' : '';
+    
+    setCurrentBucket(bucket);
+    setCurrentPrefix(normalizedPrefix);
+    loadObjects(bucket, normalizedPrefix);
+  };
+
+  const handleAddressBarClick = () => {
+    setAddressBarValue(getCurrentOssPath());
+    setAddressBarEditing(true);
+    setTimeout(() => addressInputRef.current?.select(), 0);
+  };
+
+  const handleAddressBarSubmit = () => {
+    setAddressBarEditing(false);
+    parseAndNavigateOssPath(addressBarValue);
+  };
+
+  const handleAddressBarKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleAddressBarSubmit();
+    } else if (e.key === 'Escape') {
+      setAddressBarEditing(false);
+    }
+  };
+
+  const handleAddressBarBlur = () => {
+    setAddressBarEditing(false);
   };
 
   const handleAddBookmark = () => {
@@ -418,8 +482,22 @@ function FileBrowser({ config, profileName, onTransferStart, onTransferFinish }:
           <button className="nav-btn" onClick={handleRefresh} disabled={loading} title="Refresh">↻</button>
           <button className="nav-btn" onClick={handleUpload} disabled={!currentBucket} title="Upload File">↑ Upload</button>
         </div>
-        <div className="breadcrumbs">
-          {renderBreadcrumbs()}
+        <div className="breadcrumbs" onClick={!addressBarEditing ? handleAddressBarClick : undefined}>
+          {addressBarEditing ? (
+            <input
+              ref={addressInputRef}
+              type="text"
+              className="address-input"
+              value={addressBarValue}
+              onChange={(e) => setAddressBarValue(e.target.value)}
+              onKeyDown={handleAddressBarKeyDown}
+              onBlur={handleAddressBarBlur}
+              placeholder="oss://bucket/path/"
+              autoFocus
+            />
+          ) : (
+            renderBreadcrumbs()
+          )}
         </div>
       </div>
 

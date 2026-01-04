@@ -143,6 +143,8 @@
     white-space: nowrap;
     padding-right: 18px;
     scrollbar-width: thin;
+    cursor: text;
+    flex: 1;
 }
 
 .crumb {
@@ -172,6 +174,30 @@
 .separator {
     color: rgba(255, 255, 255, 0.3);
     font-size: 12px;
+}
+
+/* Address Bar Input */
+.address-input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(79, 172, 254, 0.4);
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #ffffff;
+    font-size: 14px;
+    font-family: monospace;
+    outline: none;
+    min-width: 200px;
+}
+
+.address-input:focus {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #4facfe;
+    box-shadow: 0 0 0 2px rgba(79, 172, 254, 0.2);
+}
+
+.address-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
 }
 
 /* Content Area */
@@ -392,6 +418,22 @@ body.theme-light .file-browser .crumb.active {
 
 body.theme-light .file-browser .separator {
     color: rgba(15, 23, 42, 0.35);
+}
+
+body.theme-light .file-browser .address-input {
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(79, 172, 254, 0.4);
+    color: #0f172a;
+}
+
+body.theme-light .file-browser .address-input:focus {
+    background: rgba(15, 23, 42, 0.06);
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15);
+}
+
+body.theme-light .file-browser .address-input::placeholder {
+    color: rgba(15, 23, 42, 0.4);
 }
 
 body.theme-light .file-browser .bucket-item {
