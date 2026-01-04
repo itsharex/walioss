@@ -45,6 +45,7 @@ function FileBrowser({ config, profileName, onTransferStart, onTransferFinish }:
   
   // Modal State
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [propertiesModalOpen, setPropertiesModalOpen] = useState(false);
   const [operationLoading, setOperationLoading] = useState(false);
 
   // Address bar edit state
@@ -370,6 +371,25 @@ function FileBrowser({ config, profileName, onTransferStart, onTransferFinish }:
     }
   };
 
+  const handleCopyPath = () => {
+    const obj = contextMenu.object;
+    if (!obj) return;
+    navigator.clipboard.writeText(obj.path);
+    setContextMenu({ ...contextMenu, visible: false });
+  };
+
+  const handleOpenFolder = () => {
+    const obj = contextMenu.object;
+    if (!obj || !isFolder(obj)) return;
+    handleFolderClick(obj.name);
+    setContextMenu({ ...contextMenu, visible: false });
+  };
+
+  const handleShowProperties = () => {
+    setPropertiesModalOpen(true);
+    setContextMenu({ ...contextMenu, visible: false });
+  };
+
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -616,15 +636,99 @@ function FileBrowser({ config, profileName, onTransferStart, onTransferFinish }:
       {contextMenu.visible && (
         <div 
           className="context-menu" 
-      style={{ top: contextMenu.y, left: contextMenu.x }}
-    >
-          {contextMenu.object && !isFolder(contextMenu.object) && (
-             <div className="context-menu-item" onClick={() => handleDownload()}>
-               Download
-             </div>
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          {contextMenu.object && isFolder(contextMenu.object) && (
+            <div className="context-menu-item" onClick={handleOpenFolder}>
+              <span className="context-menu-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                </svg>
+              </span>
+              Open
+            </div>
           )}
+          {contextMenu.object && !isFolder(contextMenu.object) && (
+            <div className="context-menu-item" onClick={() => handleDownload()}>
+              <span className="context-menu-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+              </span>
+              Download
+            </div>
+          )}
+          <div className="context-menu-divider" />
+          <div className="context-menu-item" onClick={handleCopyPath}>
+            <span className="context-menu-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+              </svg>
+            </span>
+            Copy Path
+          </div>
+          <div className="context-menu-item" onClick={handleShowProperties}>
+            <span className="context-menu-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"/>
+              </svg>
+            </span>
+            Properties
+          </div>
+          <div className="context-menu-divider" />
           <div className="context-menu-item danger" onClick={handleDeleteClick}>
+            <span className="context-menu-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+            </span>
             Delete
+          </div>
+        </div>
+      )}
+
+      {/* Properties Modal */}
+      {propertiesModalOpen && contextMenu.object && (
+        <div className="modal-overlay" onClick={() => setPropertiesModalOpen(false)}>
+          <div className="modal-content properties-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Properties</h3>
+            </div>
+            <div className="properties-body">
+              <div className="property-row">
+                <span className="property-label">Name</span>
+                <span className="property-value">{contextMenu.object.name}</span>
+              </div>
+              <div className="property-row">
+                <span className="property-label">Path</span>
+                <span className="property-value mono">{contextMenu.object.path}</span>
+              </div>
+              <div className="property-row">
+                <span className="property-label">Type</span>
+                <span className="property-value">{displayType(contextMenu.object)}</span>
+              </div>
+              {!isFolder(contextMenu.object) && (
+                <>
+                  <div className="property-row">
+                    <span className="property-label">Size</span>
+                    <span className="property-value">{formatSize(contextMenu.object.size)}</span>
+                  </div>
+                  <div className="property-row">
+                    <span className="property-label">Storage Class</span>
+                    <span className="property-value">{contextMenu.object.storageClass || '-'}</span>
+                  </div>
+                </>
+              )}
+              <div className="property-row">
+                <span className="property-label">Last Modified</span>
+                <span className="property-value">{contextMenu.object.lastModified || '-'}</span>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="modal-btn modal-btn-cancel" onClick={() => setPropertiesModalOpen(false)}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
