@@ -3,6 +3,7 @@ import { main } from '../../wailsjs/go/models';
 import { ListBuckets, ListObjects, UploadFile, DownloadFile, DeleteObject } from '../../wailsjs/go/main/OSSService';
 import { SelectFile, SelectSaveFile } from '../../wailsjs/go/main/App';
 import ConfirmationModal from './ConfirmationModal';
+import FilePreviewModal from './FilePreviewModal';
 import './FileBrowser.css';
 import './Modal.css';
 
@@ -48,6 +49,8 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [propertiesModalOpen, setPropertiesModalOpen] = useState(false);
   const [operationLoading, setOperationLoading] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewObject, setPreviewObject] = useState<main.ObjectInfo | null>(null);
 
   // Address bar edit state
   const [addressBarEditing, setAddressBarEditing] = useState(false);
@@ -86,6 +89,11 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
   useEffect(() => {
     loadBookmarks();
   }, [storageKey]);
+
+  useEffect(() => {
+    setPreviewModalOpen(false);
+    setPreviewObject(null);
+  }, [currentBucket, currentPrefix]);
 
   // Close context menu on click elsewhere
   useEffect(() => {
@@ -283,6 +291,14 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
     });
   };
 
+  const handlePreview = (obj?: main.ObjectInfo) => {
+    const target = obj || contextMenu.object;
+    if (!target || !currentBucket || isFolder(target)) return;
+    setPreviewObject(target);
+    setPreviewModalOpen(true);
+    setContextMenu({ ...contextMenu, visible: false });
+  };
+
   const handleUpload = async () => {
     let transferId: string | undefined;
     try {
@@ -450,6 +466,7 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
       <span 
         key="root" 
         className={`crumb ${isRootActive ? 'active' : ''}`} 
+        title="All Buckets"
         onClick={(e) => {
           if (!isRootActive) {
             e.stopPropagation();
@@ -457,12 +474,11 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
           }
         }}
       >
-        All Buckets
+        oss://
       </span>
     );
 
     if (currentBucket) {
-      crumbs.push(<span key="sep-root" className="separator">/</span>);
       const isBucketActive = !currentPrefix;
       crumbs.push(
         <span 
@@ -618,7 +634,7 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
                   {objects.map((obj) => (
                     <tr 
                       key={obj.path || obj.name} 
-                      onClick={() => isFolder(obj) && handleFolderClick(obj.name)}
+                      onClick={() => (isFolder(obj) ? handleFolderClick(obj.name) : handlePreview(obj))}
                       onContextMenu={(e) => handleContextMenu(e, obj)}
                     >
                       <td className="file-name-cell">
@@ -651,15 +667,26 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
                             Open
                           </button>
                         ) : (
-                          <button
-                            className="link-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownload(obj);
-                            }}
-                          >
-                            Download
-                          </button>
+                          <>
+                            <button
+                              className="link-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePreview(obj);
+                              }}
+                            >
+                              Preview
+                            </button>
+                            <button
+                              className="link-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownload(obj);
+                              }}
+                            >
+                              Download
+                            </button>
+                          </>
                         )}
                       </td>
                     </tr>
@@ -684,6 +711,16 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
                 </svg>
               </span>
               Open
+            </div>
+          )}
+          {contextMenu.object && !isFolder(contextMenu.object) && (
+            <div className="context-menu-item" onClick={() => handlePreview()}>
+              <span className="context-menu-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 5c-7.633 0-10 7-10 7s2.367 7 10 7 10-7 10-7-2.367-7-10-7zm0 12c-2.761 0-5-2.239-5-5s2.239-5 5-5 5 2.239 5 5-2.239 5-5 5zm0-8a3 3 0 100 6 3 3 0 000-6z"/>
+                </svg>
+              </span>
+              Preview
             </div>
           )}
           {contextMenu.object && !isFolder(contextMenu.object) && (
@@ -724,6 +761,16 @@ function FileBrowser({ config, profileName, initialPath, onTransferStart, onTran
           </div>
         </div>
       )}
+
+      <FilePreviewModal
+        isOpen={previewModalOpen}
+        config={config}
+        bucket={currentBucket}
+        object={previewObject}
+        onClose={() => setPreviewModalOpen(false)}
+        onDownload={(obj) => handleDownload(obj)}
+        onSaved={() => currentBucket && loadObjects(currentBucket, currentPrefix)}
+      />
 
       {/* Properties Modal */}
       {propertiesModalOpen && contextMenu.object && (

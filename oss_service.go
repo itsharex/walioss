@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -124,6 +125,21 @@ func ossutilOutputOrError(err error, output []byte) string {
 	}
 	if err != nil {
 		return err.Error()
+	}
+	return ""
+}
+
+func firstHTTPURL(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		for _, field := range strings.Fields(line) {
+			if strings.HasPrefix(field, "https://") || strings.HasPrefix(field, "http://") {
+				return field
+			}
+		}
 	}
 	return ""
 }
@@ -597,6 +613,117 @@ func (s *OSSService) DeleteObject(config OSSConfig, bucket string, object string
 
 	if err != nil {
 		return fmt.Errorf("delete failed: %s", ossutilOutputOrError(err, output))
+	}
+
+	return nil
+}
+
+func (s *OSSService) PresignObject(config OSSConfig, bucket string, object string, expiresDuration string) (string, error) {
+	cloudUrl := fmt.Sprintf("oss://%s/%s", bucket, object)
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
+
+	if strings.TrimSpace(expiresDuration) == "" {
+		expiresDuration = "15m"
+	}
+
+	args := []string{
+		"presign",
+		cloudUrl,
+		"--access-key-id", config.AccessKeyID,
+		"--access-key-secret", config.AccessKeySecret,
+		"--region", region,
+		"--expires-duration", expiresDuration,
+	}
+
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
+	}
+
+	output, err := s.runOssutil(args...)
+	if err != nil {
+		return "", fmt.Errorf("presign failed: %s", ossutilOutputOrError(err, output))
+	}
+
+	url := firstHTTPURL(string(output))
+	if url == "" {
+		return "", fmt.Errorf("presign failed: unexpected output")
+	}
+
+	return url, nil
+}
+
+func (s *OSSService) GetObjectText(config OSSConfig, bucket string, object string, maxBytes int) (string, error) {
+	cloudUrl := fmt.Sprintf("oss://%s/%s", bucket, object)
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
+
+	if maxBytes <= 0 {
+		maxBytes = 256 * 1024
+	}
+	if maxBytes > 5*1024*1024 {
+		maxBytes = 5 * 1024 * 1024
+	}
+
+	args := []string{
+		"cat",
+		cloudUrl,
+		"--access-key-id", config.AccessKeyID,
+		"--access-key-secret", config.AccessKeySecret,
+		"--region", region,
+		"--count", strconv.Itoa(maxBytes),
+	}
+
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
+	}
+
+	output, err := s.runOssutil(args...)
+	if err != nil {
+		return "", fmt.Errorf("read object failed: %s", ossutilOutputOrError(err, output))
+	}
+
+	return string(output), nil
+}
+
+func (s *OSSService) PutObjectText(config OSSConfig, bucket string, object string, content string) error {
+	cloudUrl := fmt.Sprintf("oss://%s/%s", bucket, object)
+	region := normalizeRegion(config.Region)
+	endpoint := normalizeEndpoint(config.Endpoint)
+
+	tmpFile, err := os.CreateTemp("", "walioss-edit-*")
+	if err != nil {
+		return fmt.Errorf("create temp file failed: %w", err)
+	}
+	defer func() {
+		_ = os.Remove(tmpFile.Name())
+	}()
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("write temp file failed: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file failed: %w", err)
+	}
+
+	args := []string{
+		"cp",
+		tmpFile.Name(),
+		cloudUrl,
+		"--access-key-id", config.AccessKeyID,
+		"--access-key-secret", config.AccessKeySecret,
+		"--region", region,
+		"-f",
+	}
+
+	if endpoint != "" {
+		args = append(args, "--endpoint", endpoint)
+	}
+
+	output, err := s.runOssutil(args...)
+	if err != nil {
+		return fmt.Errorf("save failed: %s", ossutilOutputOrError(err, output))
 	}
 
 	return nil

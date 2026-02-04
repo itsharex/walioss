@@ -12,6 +12,8 @@ export function DownloadFile(arg1:main.OSSConfig,arg2:string,arg3:string,arg4:st
 
 export function GetDefaultProfile():Promise<main.OSSProfile>;
 
+export function GetObjectText(arg1:main.OSSConfig,arg2:string,arg3:string,arg4:number):Promise<string>;
+
 export function GetOssutilPath():Promise<string>;
 
 export function GetProfile(arg1:string):Promise<main.OSSProfile>;
@@ -23,6 +25,10 @@ export function ListBuckets(arg1:main.OSSConfig):Promise<Array<main.BucketInfo>>
 export function ListObjects(arg1:main.OSSConfig,arg2:string,arg3:string):Promise<Array<main.ObjectInfo>>;
 
 export function LoadProfiles():Promise<Array<main.OSSProfile>>;
+
+export function PresignObject(arg1:main.OSSConfig,arg2:string,arg3:string,arg4:string):Promise<string>;
+
+export function PutObjectText(arg1:main.OSSConfig,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function SaveProfile(arg1:main.OSSProfile):Promise<void>;
 

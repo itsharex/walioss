@@ -22,6 +22,10 @@ export function GetDefaultProfile() {
   return window['go']['main']['OSSService']['GetDefaultProfile']();
 }
 
+export function GetObjectText(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['OSSService']['GetObjectText'](arg1, arg2, arg3, arg4);
+}
+
 export function GetOssutilPath() {
   return window['go']['main']['OSSService']['GetOssutilPath']();
 }
@@ -44,6 +48,14 @@ export function ListObjects(arg1, arg2, arg3) {
 
 export function LoadProfiles() {
   return window['go']['main']['OSSService']['LoadProfiles']();
+}
+
+export function PresignObject(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['OSSService']['PresignObject'](arg1, arg2, arg3, arg4);
+}
+
+export function PutObjectText(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['OSSService']['PutObjectText'](arg1, arg2, arg3, arg4);
 }
 
 export function SaveProfile(arg1) {
