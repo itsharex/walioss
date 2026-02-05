@@ -21,7 +21,7 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
     maxTransferThreads: 3,
     newTabNameRule: 'folder',
   } as main.AppSettings);
-  
+
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -107,145 +107,130 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
   if (!isOpen) return null;
 
   return (
-      <div className="modal-overlay" onClick={onBack}>
+    <div className="modal-overlay" onClick={onBack}>
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-container">
-      <div className="settings-header">
-        <h1 className="settings-title">Settings</h1>
-        <button
-          className="icon-close-btn settings-close-btn"
-          type="button"
-          onClick={onBack}
-          aria-label="Close settings"
-          title="Close"
-        >
-          ×
-        </button>
-      </div>
-
-	      <div className="settings-content">
-	        {/* Ossutil Configuration */}
-	        <div className="settings-section">
-	          <h2 className="section-title">Ossutil Configuration</h2>
-	          <div className="form-group">
-	            <label className="form-label">Ossutil Path</label>
-	            <div className="form-inline">
-	              <input
-	                type="text"
-	                className="form-input"
-	                value={settings.ossutilPath}
-	                onChange={(e) => setSettings({ ...settings, ossutilPath: e.target.value })}
-	                placeholder="Leave empty to use auto-detected ossutil"
-	              />
-	              <button
-	                className="back-btn form-inline-btn"
-	                type="button"
-	                onClick={handleTestOssutil}
-	                disabled={loading}
-	              >
-	                Test
-	              </button>
-	            </div>
-	          </div>
-	        </div>
-
-        {/* Default Connection */}
-        <div className="settings-section">
-          <h2 className="section-title">Default Connection</h2>
-          <div className="form-group">
-            <label className="form-label">Default Region</label>
-            <input
-              type="text"
-              className="form-input"
-              value={settings.defaultRegion}
-              onChange={(e) => setSettings({ ...settings, defaultRegion: e.target.value })}
-              placeholder="e.g., cn-hangzhou"
-            />
+          <div className="settings-header">
+            <h1 className="settings-title">Settings</h1>
+            <button
+              className="icon-close-btn settings-close-btn"
+              type="button"
+              onClick={onBack}
+              aria-label="Close settings"
+              title="Close"
+            >
+              ×
+            </button>
           </div>
-          <div className="form-group">
-            <label className="form-label">Default Endpoint</label>
-            <input
-              type="text"
-              className="form-input"
-              value={settings.defaultEndpoint}
-              onChange={(e) => setSettings({ ...settings, defaultEndpoint: e.target.value })}
-              placeholder="e.g., oss-cn-hangzhou.aliyuncs.com"
-            />
-          </div>
-        </div>
 
-        {/* Appearance */}
-        <div className="settings-section">
-          <h2 className="section-title">Appearance</h2>
-          <div className="form-group">
-            <label className="form-label">Theme</label>
-            <div className="theme-toggle">
-              <div 
-                className={`theme-option ${settings.theme === 'dark' ? 'active' : ''}`}
-                onClick={() => handleThemeSelect('dark')}
-              >
-                Dark
-              </div>
-              <div 
-                className={`theme-option ${settings.theme === 'light' ? 'active' : ''}`}
-                onClick={() => handleThemeSelect('light')}
-              >
-                Light
+          <div className="settings-content">
+            {/* Ossutil Configuration */}
+            <div className="settings-section">
+              <h2 className="section-title">Ossutil Configuration</h2>
+              <div className="form-group">
+                <label className="form-label">Ossutil Path</label>
+                <div className="form-inline">
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={settings.ossutilPath}
+                    onChange={(e) => setSettings({ ...settings, ossutilPath: e.target.value })}
+                    placeholder="Leave empty to use auto-detected ossutil"
+                  />
+                  <button className="back-btn form-inline-btn" type="button" onClick={handleTestOssutil} disabled={loading}>
+                    Test
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="settings-section">
-          <h2 className="section-title">Tabs</h2>
-          <div className="form-group">
-            <label className="form-label">New Tab Naming</label>
-            <div className="theme-toggle">
-              <div
-                className={`theme-option ${settings.newTabNameRule === 'folder' ? 'active' : ''}`}
-                onClick={() => setSettings((prev) => ({ ...prev, newTabNameRule: 'folder' }))}
-              >
-                Current Folder
-              </div>
-              <div
-                className={`theme-option ${settings.newTabNameRule === 'newTab' ? 'active' : ''}`}
-                onClick={() => setSettings((prev) => ({ ...prev, newTabNameRule: 'newTab' }))}
-              >
-                New Tab
+            {/* Transfers */}
+            <div className="settings-section">
+              <h2 className="section-title">Transfers</h2>
+              <div className="form-group">
+                <label className="form-label">Max Concurrent Transfers</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={settings.maxTransferThreads ?? 3}
+                  min={1}
+                  max={64}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    setSettings({ ...settings, maxTransferThreads: Number.isFinite(v) ? v : 1 });
+                  }}
+                  placeholder="e.g., 3"
+                />
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Transfers */}
-        <div className="settings-section">
-          <h2 className="section-title">Transfers</h2>
-          <div className="form-group">
-            <label className="form-label">Max Concurrent Transfers</label>
-            <input
-              type="number"
-              className="form-input"
-              value={settings.maxTransferThreads ?? 3}
-              min={1}
-              max={64}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setSettings({ ...settings, maxTransferThreads: Number.isFinite(v) ? v : 1 });
-              }}
-              placeholder="e.g., 3"
-            />
-          </div>
-        </div>
+            {/* Default Connection */}
+            <div className="settings-section">
+              <h2 className="section-title">Default Connection</h2>
+              <div className="form-group">
+                <label className="form-label">Default Region</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={settings.defaultRegion}
+                  onChange={(e) => setSettings({ ...settings, defaultRegion: e.target.value })}
+                  placeholder="e.g., cn-hangzhou"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Default Endpoint</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={settings.defaultEndpoint}
+                  onChange={(e) => setSettings({ ...settings, defaultEndpoint: e.target.value })}
+                  placeholder="e.g., oss-cn-hangzhou.aliyuncs.com"
+                />
+              </div>
+            </div>
 
-        <button 
-          className="save-btn" 
-          onClick={handleSave}
-          disabled={loading}
-        >
-          {loading ? 'Saving...' : 'Save Settings'}
-        </button>
-      </div>
+            {/* Appearance */}
+            <div className="settings-section">
+              <h2 className="section-title">Appearance</h2>
+              <div className="form-group">
+                <label className="form-label">Theme</label>
+                <div className="theme-toggle">
+                  <div className={`theme-option ${settings.theme === 'dark' ? 'active' : ''}`} onClick={() => handleThemeSelect('dark')}>
+                    Dark
+                  </div>
+                  <div className={`theme-option ${settings.theme === 'light' ? 'active' : ''}`} onClick={() => handleThemeSelect('light')}>
+                    Light
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="settings-section">
+              <h2 className="section-title">Tabs</h2>
+              <div className="form-group">
+                <label className="form-label">New Tab Naming</label>
+                <div className="theme-toggle">
+                  <div
+                    className={`theme-option ${settings.newTabNameRule === 'folder' ? 'active' : ''}`}
+                    onClick={() => setSettings((prev) => ({ ...prev, newTabNameRule: 'folder' }))}
+                  >
+                    Current Folder
+                  </div>
+                  <div
+                    className={`theme-option ${settings.newTabNameRule === 'newTab' ? 'active' : ''}`}
+                    onClick={() => setSettings((prev) => ({ ...prev, newTabNameRule: 'newTab' }))}
+                  >
+                    New Tab
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button className="save-btn" type="button" onClick={handleSave} disabled={loading}>
+              {loading ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

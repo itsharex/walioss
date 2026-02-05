@@ -187,6 +187,28 @@ body.theme-light .dashboard-container::after {
     gap: 12px;
 }
 
+.app-brand-clickable {
+    cursor: pointer;
+    user-select: none;
+    border-radius: 14px;
+    padding: 6px 8px;
+    margin: -6px -8px;
+    transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.app-brand-clickable:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.app-brand-clickable:active {
+    transform: translateY(1px);
+}
+
+.app-brand-clickable:focus-visible {
+    outline: 2px solid rgba(79, 172, 254, 0.65);
+    outline-offset: 3px;
+}
+
 .app-icon {
     width: 28px;
     height: 28px;
@@ -686,6 +708,10 @@ body.theme-light .app-name {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+}
+
+body.theme-light .app-brand-clickable:hover {
+    background: rgba(15, 23, 42, 0.04);
 }
 
 body.theme-light .header-info {

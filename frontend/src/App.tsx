@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './App.css';
 import Login from './pages/Login';
 import Settings from './pages/Settings';
+import AboutModal from './components/AboutModal';
 import FileBrowser from './components/FileBrowser';
 import TransferModal from './components/TransferModal';
 import { main } from '../wailsjs/go/models';
 import { GetSettings } from '../wailsjs/go/main/OSSService';
-import { OpenFile, OpenInFinder } from '../wailsjs/go/main/App';
+import { GetAppInfo, OpenFile, OpenInFinder } from '../wailsjs/go/main/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
 type GlobalView = 'session' | 'settings';
@@ -43,6 +44,12 @@ type TransferItem = {
 type ToastType = 'success' | 'error' | 'info';
 type Toast = { id: number; type: ToastType; message: string };
 
+type AppInfo = {
+  name: string;
+  version: string;
+  githubUrl?: string;
+};
+
 function App() {
   const [globalView, setGlobalView] = useState<GlobalView>('session');
   const [theme, setTheme] = useState<string>('dark');
@@ -63,6 +70,9 @@ function App() {
   const [transferView, setTransferView] = useState<TransferType>('download');
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const [aboutOpen, setAboutOpen] = useState<boolean>(false);
+  const [aboutLoading, setAboutLoading] = useState<boolean>(false);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
@@ -123,7 +133,7 @@ function App() {
     return autoTitleFromLocation(bucket, prefix);
   };
 
-  const showToast = (type: ToastType, message: string, timeoutMs = 2600) => {
+  const showToast = useCallback((type: ToastType, message: string, timeoutMs = 2600) => {
     const id = Date.now();
     setToast({ id, type, message });
     if (toastTimerRef.current) {
@@ -132,7 +142,7 @@ function App() {
     toastTimerRef.current = window.setTimeout(() => {
       setToast((prev) => (prev?.id === id ? null : prev));
     }, timeoutMs);
-  };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -141,6 +151,24 @@ function App() {
       }
     };
   }, []);
+
+  const ensureAppInfo = useCallback(async () => {
+    if (aboutLoading || appInfo) return;
+    setAboutLoading(true);
+    try {
+      const info = (await GetAppInfo()) as any;
+      setAppInfo(info as AppInfo);
+    } catch (err: any) {
+      showToast('error', err?.message || 'Failed to load app info');
+    } finally {
+      setAboutLoading(false);
+    }
+  }, [aboutLoading, appInfo, showToast]);
+
+  const openAbout = useCallback(() => {
+    setAboutOpen(true);
+    void ensureAppInfo();
+  }, [ensureAppInfo]);
 
   useEffect(() => {
     const off = EventsOn('transfer:update', (payload: any) => {
@@ -178,6 +206,13 @@ function App() {
     });
     return () => off();
   }, []);
+
+  useEffect(() => {
+    const off = EventsOn('app:about', () => {
+      openAbout();
+    });
+    return () => off();
+  }, [openAbout]);
 
   // Titlebar drag region for macOS
   const TitlebarDrag = () => <div className="titlebar-drag" />;
@@ -331,13 +366,25 @@ function App() {
     <>
       <TitlebarDrag />
       <div className="dashboard-container">
-        <header className="dashboard-header">
-          <div className="dashboard-topbar">
-            <div className="app-brand">
-              <img className="app-icon" src="/appicon.png" alt="Walioss" />
-              <h1 className="app-name">Walioss</h1>
-            </div>
-            <div className="header-info">
+	        <header className="dashboard-header">
+	          <div className="dashboard-topbar">
+	            <div
+	              className="app-brand app-brand-clickable"
+	              role="button"
+	              tabIndex={0}
+	              onClick={openAbout}
+	              onKeyDown={(e) => {
+	                if (e.key === 'Enter' || e.key === ' ') {
+	                  e.preventDefault();
+	                  openAbout();
+	                }
+	              }}
+	              title="About"
+	            >
+	              <img className="app-icon" src="/appicon.png" alt="Walioss" />
+	              <h1 className="app-name">Walioss</h1>
+	            </div>
+	            <div className="header-info">
               {sessionConfig && (
                 <div className="transfer-toggle">
                   <button
@@ -441,18 +488,19 @@ function App() {
 	            </div>
 	          )}
         </main>
-        <Settings
-          isOpen={globalView === 'settings'}
-          onBack={() => setGlobalView('session')}
-          onThemeChange={handleThemeChange}
-          onNotify={(t) => showToast(t.type, t.message)}
-          onSettingsSaved={(settings) => applyNewTabNameRule(settings?.newTabNameRule === 'newTab' ? 'newTab' : 'folder')}
-        />
-        <TransferModal
-          isOpen={showTransfers}
-          activeTab={transferView}
-          onTabChange={setTransferView}
-          transfers={transfers}
+	        <Settings
+	          isOpen={globalView === 'settings'}
+	          onBack={() => setGlobalView('session')}
+	          onThemeChange={handleThemeChange}
+	          onNotify={(t) => showToast(t.type, t.message)}
+	          onSettingsSaved={(settings) => applyNewTabNameRule(settings?.newTabNameRule === 'newTab' ? 'newTab' : 'folder')}
+	        />
+	        <AboutModal isOpen={aboutOpen} info={appInfo} loading={aboutLoading} onClose={() => setAboutOpen(false)} />
+	        <TransferModal
+	          isOpen={showTransfers}
+	          activeTab={transferView}
+	          onTabChange={setTransferView}
+	          transfers={transfers}
           onClose={() => setShowTransfers(false)}
           onReveal={(p) => OpenInFinder(p)}
           onOpen={(p) => OpenFile(p)}
