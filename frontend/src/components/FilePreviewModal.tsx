@@ -4,7 +4,7 @@ import { GetObjectText, PresignObject, PutObjectText } from '../../wailsjs/go/ma
 import './FilePreviewModal.css';
 import './Modal.css';
 
-type PreviewKind = 'text' | 'image' | 'video' | 'unsupported';
+type PreviewKind = 'text' | 'image' | 'video' | 'pdf' | 'unsupported';
 
 const MAX_TEXT_PREVIEW_BYTES = 256 * 1024;
 const MAX_TEXT_EDIT_BYTES = 1024 * 1024;
@@ -52,6 +52,7 @@ const textExtensions = new Set([
 
 const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg']);
 const videoExtensions = new Set(['mp4', 'webm', 'mov', 'mkv']);
+const pdfExtensions = new Set(['pdf']);
 
 function getFileExtension(name: string) {
   const parts = name.split('.');
@@ -213,14 +214,26 @@ interface FilePreviewModalProps {
   onClose: () => void;
   onDownload?: (obj: main.ObjectInfo) => void;
   onSaved?: () => void;
+  onNavigate?: (direction: -1 | 1) => void;
 }
 
-export default function FilePreviewModal({ isOpen, config, bucket, object, onClose, onDownload, onSaved }: FilePreviewModalProps) {
+export default function FilePreviewModal({
+  isOpen,
+  config,
+  bucket,
+  object,
+  onClose,
+  onDownload,
+  onSaved,
+  onNavigate,
+}: FilePreviewModalProps) {
   const [kind, setKind] = useState<PreviewKind>('unsupported');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [presignedUrl, setPresignedUrl] = useState<string>('');
+  const [mediaUrl, setMediaUrl] = useState<string>('');
+  const [mediaFallbackTried, setMediaFallbackTried] = useState(false);
   const [text, setText] = useState<string>('');
   const [originalText, setOriginalText] = useState<string>('');
   const [truncated, setTruncated] = useState(false);
@@ -253,6 +266,7 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
     const ext = getFileExtension(nameLower);
     if (imageExtensions.has(ext)) return 'image';
     if (videoExtensions.has(ext)) return 'video';
+    if (pdfExtensions.has(ext)) return 'pdf';
     if (textExtensions.has(ext) || nameLower === 'dockerfile' || nameLower === 'makefile') return 'text';
     return 'unsupported';
   }, [object]);
@@ -275,6 +289,8 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
     setSaving(false);
     setError(null);
     setPresignedUrl('');
+    setMediaUrl('');
+    setMediaFallbackTried(false);
     setText('');
     setOriginalText('');
     setTruncated(false);
@@ -293,7 +309,7 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
           return;
         }
 
-        if (kindFromName === 'image' || kindFromName === 'video') {
+        if (kindFromName === 'image' || kindFromName === 'video' || kindFromName === 'pdf') {
           const url = await PresignObject(config, bucket, fileKey, '30m');
           setPresignedUrl(url);
           return;
@@ -319,6 +335,12 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
   }, [bucket, canEditText, config, fileKey, isOpen, kindFromName, object]);
 
   useEffect(() => {
+    if (!presignedUrl) return;
+    setMediaUrl(presignedUrl);
+    setMediaFallbackTried(false);
+  }, [presignedUrl]);
+
+  useEffect(() => {
     return () => {
       if (pathCopyTimerRef.current) {
         window.clearTimeout(pathCopyTimerRef.current);
@@ -332,11 +354,29 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
       if (e.key === 'Escape') {
         e.preventDefault();
         requestClose();
+        return;
+      }
+
+      const isArrow =
+        e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown';
+      if (!isArrow || !onNavigate) return;
+
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase() || '';
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return;
+
+      e.preventDefault();
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        onNavigate(-1);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        onNavigate(1);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, requestClose]);
+  }, [isOpen, onNavigate, requestClose]);
 
   const handleCopyPath = async () => {
     if (!object?.path) return;
@@ -350,6 +390,22 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
       window.clearTimeout(pathCopyTimerRef.current);
     }
     pathCopyTimerRef.current = window.setTimeout(() => setPathCopyState('idle'), 1200);
+  };
+
+  const handleMediaError = () => {
+    if (!presignedUrl) return;
+    if (mediaFallbackTried) {
+      setError((prev) => prev || 'Failed to load preview.');
+      return;
+    }
+    const encoded = encodeURI(presignedUrl);
+    if (encoded && encoded !== mediaUrl) {
+      setMediaFallbackTried(true);
+      setMediaUrl(encoded);
+      return;
+    }
+    setMediaFallbackTried(true);
+    setError((prev) => prev || 'Failed to load preview.');
   };
 
   useEffect(() => {
@@ -395,8 +451,9 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
           {presignedUrl ? (
             <img
               className="preview-image"
-              src={presignedUrl}
+              src={mediaUrl || presignedUrl}
               alt={object.name}
+              onError={handleMediaError}
               onLoad={(e) => {
                 const img = e.currentTarget;
                 if (img.naturalWidth > 0 && img.naturalHeight > 0) {
@@ -417,9 +474,10 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
           {presignedUrl ? (
             <video
               className="preview-video"
-              src={presignedUrl}
+              src={mediaUrl || presignedUrl}
               controls
               preload="metadata"
+              onError={handleMediaError}
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget;
                 const duration = Number.isFinite(v.duration) ? v.duration : 0;
@@ -430,6 +488,18 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
                 }
               }}
             />
+          ) : (
+            <div className="preview-empty">No preview URL</div>
+          )}
+        </div>
+      );
+    }
+
+    if (kind === 'pdf') {
+      return (
+        <div className="preview-media">
+          {presignedUrl ? (
+            <iframe className="preview-pdf" src={mediaUrl || presignedUrl} title={object.name} onError={handleMediaError} />
           ) : (
             <div className="preview-empty">No preview URL</div>
           )}
@@ -509,7 +579,17 @@ export default function FilePreviewModal({ isOpen, config, bucket, object, onClo
             <div className="preview-meta">
               <div className="meta-chip">
                 <span className="meta-label">Type</span>
-                <span className="meta-value">{kindFromName === 'text' ? 'Text' : kindFromName === 'image' ? 'Image' : kindFromName === 'video' ? 'Video' : 'File'}</span>
+                <span className="meta-value">
+                  {kindFromName === 'text'
+                    ? 'Text'
+                    : kindFromName === 'image'
+                      ? 'Image'
+                      : kindFromName === 'video'
+                        ? 'Video'
+                        : kindFromName === 'pdf'
+                          ? 'PDF'
+                          : 'File'}
+                </span>
               </div>
               {loadElapsedMs !== null && (
                 <div className="meta-chip">

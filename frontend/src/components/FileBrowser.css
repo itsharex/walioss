@@ -286,6 +286,103 @@
     flex: 1;
 }
 
+.crumb-popover {
+    position: fixed;
+    min-width: 260px;
+    max-width: 360px;
+    padding: 10px;
+    background: #1e1e36;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.7);
+    z-index: 980;
+    animation: fadeIn 0.12s ease;
+}
+
+.crumb-popover-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.9);
+    padding: 4px 6px 8px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.crumb-popover-list {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 190px; /* ~5 rows */
+    overflow: auto;
+    scrollbar-width: thin;
+}
+
+.crumb-popover-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+    text-align: left;
+    transition: all 0.12s ease;
+}
+
+.crumb-popover-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.crumb-popover-item-icon {
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+    opacity: 0.9;
+}
+
+.crumb-popover-item-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.crumb-popover-empty {
+    padding: 10px 8px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+}
+
+.crumb-popover-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px 6px 8px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+}
+
+.crumb-popover-loading-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    border-top-color: rgba(79, 172, 254, 0.9);
+    animation: spin 0.9s linear infinite;
+}
+
 .header-actions {
     display: flex;
     align-items: center;
@@ -530,12 +627,14 @@
     height: 100%;
     min-height: 0;
     box-sizing: border-box;
+    user-select: none;
 }
 
 .file-table-scroll {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .file-table {
@@ -931,6 +1030,36 @@ body.theme-light .file-browser .crumb.active {
 
 body.theme-light .file-browser .separator {
     color: rgba(15, 23, 42, 0.35);
+}
+
+body.theme-light .file-browser .crumb-popover {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 18px 50px -12px rgba(15, 23, 42, 0.25);
+}
+
+body.theme-light .file-browser .crumb-popover-title {
+    color: rgba(15, 23, 42, 0.8);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .file-browser .crumb-popover-item {
+    color: rgba(15, 23, 42, 0.92);
+}
+
+body.theme-light .file-browser .crumb-popover-item:hover {
+    background: rgba(15, 23, 42, 0.04);
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .file-browser .crumb-popover-empty,
+body.theme-light .file-browser .crumb-popover-loading {
+    color: rgba(15, 23, 42, 0.6);
+}
+
+body.theme-light .file-browser .crumb-popover-loading-dot {
+    border: 2px solid rgba(15, 23, 42, 0.14);
+    border-top-color: rgba(2, 132, 199, 0.9);
 }
 
 body.theme-light .file-browser .address-input {

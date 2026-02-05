@@ -81,6 +81,18 @@ interface ContextMenuState {
   object: main.ObjectInfo | null;
 }
 
+type CrumbPopoverState = {
+  bucket: string;
+  prefix: string;
+  x: number;
+  y: number;
+  items: main.ObjectInfo[];
+  nextMarker: string;
+  hasMore: boolean;
+  loading: boolean;
+  error: string | null;
+};
+
 function FileBrowser({ config, profileName, initialPath, onLocationChange }: FileBrowserProps) {
   const [currentBucket, setCurrentBucket] = useState('');
   const [currentPrefix, setCurrentPrefix] = useState('');
@@ -94,6 +106,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(() => new Set());
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const lastSelectionIndexRef = useRef<number | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
 
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
@@ -124,6 +137,11 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewObject, setPreviewObject] = useState<main.ObjectInfo | null>(null);
   const [bookmarkMenuOpen, setBookmarkMenuOpen] = useState(false);
+  const [crumbPopover, setCrumbPopover] = useState<CrumbPopoverState | null>(null);
+  const crumbPopoverRequestIdRef = useRef(0);
+  const crumbPopoverCloseTimerRef = useRef<number | null>(null);
+  const crumbPopoverFetchingRef = useRef(false);
+  const crumbPopoverFetchingRequestIdRef = useRef(0);
 
   // Address bar edit state
   const [addressBarEditing, setAddressBarEditing] = useState(false);
@@ -133,7 +151,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
   const createFileInputRef = useRef<HTMLInputElement>(null);
   const moveInputRef = useRef<HTMLInputElement>(null);
 
-  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const tableViewportRef = useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = useState<number[]>(() => {
     const fallbackWidth = Math.max(720, window.innerWidth - 160);
     return fitWidthsToContainer(DEFAULT_TABLE_COLUMN_WIDTHS, fallbackWidth);
@@ -195,6 +213,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
   useEffect(() => {
     setSelectedPaths(new Set());
     setDropTargetPath(null);
+    lastSelectionIndexRef.current = null;
   }, [currentBucket, currentPrefix, pageIndex]);
 
   useEffect(() => {
@@ -220,7 +239,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
 
   useEffect(() => {
     if (!tableVisible) return;
-    const el = tableContainerRef.current;
+    const el = tableViewportRef.current;
     if (!el) return;
 
     let raf = 0;
@@ -293,6 +312,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
     const handleClick = () => {
       setContextMenu((prev) => (prev.visible ? { ...prev, visible: false } : prev));
       setBookmarkMenuOpen(false);
+      setCrumbPopover(null);
     };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
@@ -725,6 +745,11 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
     return { bucket, key };
   };
 
+  const clearSelection = () => {
+    setSelectedPaths(new Set());
+    lastSelectionIndexRef.current = null;
+  };
+
   const objectNameForKey = (name: string) => (name || '').replace(/\/+$/, '');
 
   const moveDragPayload = async (payload: OssDragPayload, destBucket: string, destPrefix: string) => {
@@ -758,7 +783,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
       const sourcePrefix = normalizePrefix(payload.source?.prefix || currentPrefix);
       EventsEmit('objects:changed', { bucket: sourceBucket, prefix: sourcePrefix }, { bucket: destBucket, prefix: normalizedDestPrefix });
 
-      setSelectedPaths(new Set());
+      clearSelection();
       handleRefresh();
     } catch (err: any) {
       alert('Move failed: ' + (err?.message || String(err)));
@@ -998,7 +1023,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
       setMoveModalOpen(false);
       setMoveTargets([]);
       setMoveDestValue('');
-      setSelectedPaths(new Set());
+      clearSelection();
       EventsEmit('objects:changed', { bucket: currentBucket, prefix: currentPrefix }, { bucket: dest.bucket, prefix: dest.prefix });
       handleRefresh();
     } catch (err: any) {
@@ -1047,7 +1072,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
       }
       setDeleteModalOpen(false);
       setDeleteTargets([]);
-      setSelectedPaths(new Set());
+      clearSelection();
       EventsEmit('objects:changed', { bucket: currentBucket, prefix: currentPrefix });
       handleRefresh();
     } catch (err: any) {
@@ -1123,6 +1148,130 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
     return guessType(obj.name, obj.type || 'File');
   };
 
+  const clearCrumbPopoverCloseTimer = () => {
+    if (crumbPopoverCloseTimerRef.current) {
+      window.clearTimeout(crumbPopoverCloseTimerRef.current);
+    }
+    crumbPopoverCloseTimerRef.current = null;
+  };
+
+  const scheduleCloseCrumbPopover = (delayMs = 160) => {
+    clearCrumbPopoverCloseTimer();
+    crumbPopoverCloseTimerRef.current = window.setTimeout(() => {
+      setCrumbPopover(null);
+    }, delayMs);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearCrumbPopoverCloseTimer();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (addressBarEditing) {
+      setCrumbPopover(null);
+      clearCrumbPopoverCloseTimer();
+    }
+  }, [addressBarEditing]);
+
+  const loadCrumbPopoverPage = async (requestId: number, bucket: string, prefix: string, marker: string, append: boolean) => {
+    try {
+      const res = await ListObjectsPage(config, bucket, prefix, marker, 120);
+      if (crumbPopoverRequestIdRef.current !== requestId) return;
+
+      const folders = (res?.items || []).filter((item) => isFolder(item));
+      const hasMore = !!res?.isTruncated && !!res?.nextMarker;
+      const nextMarker = hasMore ? res.nextMarker : '';
+
+      setCrumbPopover((prev) => {
+        if (!prev) return prev;
+        if (prev.bucket !== bucket || prev.prefix !== prefix) return prev;
+
+        const combined = append ? [...prev.items, ...folders] : folders;
+        const seen = new Set<string>();
+        const unique = combined.filter((it) => {
+          const key = it.path || it.name;
+          if (!key) return false;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        return {
+          ...prev,
+          items: unique,
+          nextMarker,
+          hasMore,
+          loading: false,
+          error: null,
+        };
+      });
+    } catch (err: any) {
+      if (crumbPopoverRequestIdRef.current !== requestId) return;
+      setCrumbPopover((prev) =>
+        prev
+          ? {
+              ...prev,
+              loading: false,
+              error: err?.message || 'Failed to load folders',
+              hasMore: false,
+              nextMarker: '',
+            }
+          : prev,
+      );
+    } finally {
+      if (crumbPopoverFetchingRequestIdRef.current === requestId) {
+        crumbPopoverFetchingRef.current = false;
+      }
+    }
+  };
+
+  const openCrumbPopover = (bucket: string, prefix: string, anchorEl: HTMLElement) => {
+    if (addressBarEditing) return;
+    bucket = normalizeBucketName(bucket);
+    if (!bucket) return;
+    prefix = normalizePrefix(prefix);
+
+    const rect = anchorEl.getBoundingClientRect();
+    const maxWidth = 360;
+    const margin = 12;
+    const x = Math.max(margin, Math.min(Math.round(rect.left), window.innerWidth - maxWidth - margin));
+    const y = Math.max(margin, Math.round(rect.bottom + 8));
+
+    const requestId = ++crumbPopoverRequestIdRef.current;
+    crumbPopoverFetchingRef.current = true;
+    crumbPopoverFetchingRequestIdRef.current = requestId;
+    clearCrumbPopoverCloseTimer();
+    setCrumbPopover({
+      bucket,
+      prefix,
+      x,
+      y,
+      items: [],
+      nextMarker: '',
+      hasMore: false,
+      loading: true,
+      error: null,
+    });
+
+    void loadCrumbPopoverPage(requestId, bucket, prefix, '', false);
+  };
+
+  const handleCrumbPopoverScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (!crumbPopover || crumbPopover.loading || !crumbPopover.hasMore || !crumbPopover.nextMarker) return;
+    if (crumbPopoverFetchingRef.current) return;
+    const el = e.currentTarget;
+    if (el.scrollTop + el.clientHeight < el.scrollHeight - 24) return;
+    const requestId = crumbPopoverRequestIdRef.current;
+
+    crumbPopoverFetchingRef.current = true;
+    crumbPopoverFetchingRequestIdRef.current = requestId;
+    setCrumbPopover((prev) => (prev ? { ...prev, loading: true } : prev));
+    void loadCrumbPopoverPage(requestId, crumbPopover.bucket, crumbPopover.prefix, crumbPopover.nextMarker, true);
+  };
+
 	  const renderBreadcrumbs = () => {
 	    const crumbs = [];
     const isRootActive = !currentBucket;
@@ -1155,6 +1304,8 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
               handleBreadcrumbClick(0);
             }
           }}
+          onMouseEnter={(e) => openCrumbPopover(bucketDisplay, '', e.currentTarget)}
+          onMouseLeave={() => scheduleCloseCrumbPopover()}
         >
           {bucketDisplay}
         </span>
@@ -1165,6 +1316,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
         parts.forEach((part, index) => {
           crumbs.push(<span key={`sep-${index}`} className="separator">/</span>);
           const isLast = index === parts.length - 1;
+          const partPrefix = parts.slice(0, index + 1).join('/') + '/';
           crumbs.push(
             <span 
                 key={`part-${index}`} 
@@ -1175,6 +1327,8 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
                     handleBreadcrumbClick(index + 1);
                   }
                 }}
+                onMouseEnter={(e) => openCrumbPopover(bucketDisplay, partPrefix, e.currentTarget)}
+                onMouseLeave={() => scheduleCloseCrumbPopover()}
             >
               {part}
             </span>
@@ -1188,6 +1342,17 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
 	  const selectedObjects = objects.filter((obj) => !!obj.path && selectedPaths.has(obj.path));
 	  const selectedCount = selectedObjects.length;
 	  const allSelectedOnPage = objects.length > 0 && selectedCount === objects.length;
+	  const previewableFiles = objects.filter((obj) => !isFolder(obj));
+	  const previewIndex =
+	    previewObject?.path ? previewableFiles.findIndex((obj) => obj.path === previewObject.path) : -1;
+
+	  const handlePreviewNavigate = (direction: -1 | 1) => {
+	    if (previewIndex < 0) return;
+	    const target = previewableFiles[previewIndex + direction];
+	    if (!target) return;
+	    setPreviewObject(target);
+	    setPreviewModalOpen(true);
+	  };
 
 	  return (
 	    <div className="file-browser">
@@ -1289,6 +1454,53 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
 	            renderBreadcrumbs()
 	          )}
 	        </div>
+
+	        {crumbPopover && !addressBarEditing && (
+	          <div
+	            className="crumb-popover"
+	            style={{ top: `${crumbPopover.y}px`, left: `${crumbPopover.x}px` }}
+	            onMouseEnter={clearCrumbPopoverCloseTimer}
+	            onMouseLeave={() => scheduleCloseCrumbPopover()}
+	            onClick={(e) => e.stopPropagation()}
+	          >
+	            <div className="crumb-popover-title" title={`oss://${crumbPopover.bucket}/${crumbPopover.prefix}`}>
+	              {crumbPopover.prefix ? crumbPopover.prefix : '/'}
+	            </div>
+	            <div className="crumb-popover-list" onScroll={handleCrumbPopoverScroll}>
+	              {crumbPopover.items.map((folder) => (
+	                <button
+	                  key={folder.path || folder.name}
+	                  className="crumb-popover-item"
+	                  type="button"
+	                  onClick={(e) => {
+	                    e.stopPropagation();
+	                    navigateTo(crumbPopover.bucket, `${crumbPopover.prefix}${folder.name}/`);
+	                    setCrumbPopover(null);
+	                  }}
+	                  title={folder.name}
+	                >
+	                  <span className="crumb-popover-item-icon">📁</span>
+	                  <span className="crumb-popover-item-name">{folder.name}</span>
+	                </button>
+	              ))}
+
+	              {!crumbPopover.loading && crumbPopover.error && (
+	                <div className="crumb-popover-empty">{crumbPopover.error}</div>
+	              )}
+
+	              {!crumbPopover.loading && !crumbPopover.error && crumbPopover.items.length === 0 && (
+	                <div className="crumb-popover-empty">No subfolders</div>
+	              )}
+
+	              {crumbPopover.loading && (
+	                <div className="crumb-popover-loading">
+	                  <span className="crumb-popover-loading-dot" />
+	                  <span>Loading…</span>
+	                </div>
+	              )}
+	            </div>
+	          </div>
+	        )}
 	      </div>
 
 	      {currentBucket && (
@@ -1297,7 +1509,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
 	            <div className={`selection-pill ${selectedCount > 0 ? 'active' : ''}`}>
 	              <span className="selection-label">{selectedCount > 0 ? `${selectedCount} selected` : 'No selection'}</span>
 	              {selectedCount > 0 && (
-	                <button className="mini-link" type="button" onClick={() => setSelectedPaths(new Set())}>
+	                <button className="mini-link" type="button" onClick={clearSelection}>
 	                  Clear
 	                </button>
 	              )}
@@ -1379,8 +1591,8 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
                 <p>Folder is empty.</p>
              </div>
 	          ) : (
-	            <div className="file-table-container" ref={tableContainerRef} onDragOver={handleTableDragOver} onDrop={handleTableDrop}>
-	              <div className="file-table-scroll">
+	            <div className="file-table-container" onDragOver={handleTableDragOver} onDrop={handleTableDrop}>
+	              <div className="file-table-scroll" ref={tableViewportRef}>
 	                <table className="file-table">
 	                  <colgroup>
 	                    {columnWidths.map((w, i) => (
@@ -1434,7 +1646,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
 		                    </tr>
 		                  </thead>
 		                  <tbody>
-		                    {objects.map((obj) => (
+		                    {objects.map((obj, rowIndex) => (
 		                      <tr
 		                        key={obj.path || obj.name}
 		                        className={`${obj.path && selectedPaths.has(obj.path) ? 'selected' : ''} ${dropTargetPath && obj.path === dropTargetPath ? 'drop-target' : ''}`.trim()}
@@ -1454,12 +1666,27 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
 		                            onChange={(e) => {
 		                              if (!obj.path) return;
 		                              const checked = e.target.checked;
+		                              const shiftKey = !!(e.nativeEvent as any)?.shiftKey;
 		                              setSelectedPaths((prev) => {
 		                                const next = new Set(prev);
-		                                if (checked) next.add(obj.path);
-		                                else next.delete(obj.path);
+		                                const last = lastSelectionIndexRef.current;
+
+		                                if (shiftKey && last !== null && last >= 0 && last < objects.length) {
+		                                  const start = Math.min(last, rowIndex);
+		                                  const end = Math.max(last, rowIndex);
+		                                  for (let i = start; i <= end; i++) {
+		                                    const item = objects[i];
+		                                    if (!item?.path) continue;
+		                                    if (checked) next.add(item.path);
+		                                    else next.delete(item.path);
+		                                  }
+		                                } else {
+		                                  if (checked) next.add(obj.path);
+		                                  else next.delete(obj.path);
+		                                }
 		                                return next;
 		                              });
+		                              lastSelectionIndexRef.current = rowIndex;
 		                            }}
 		                            aria-label={`Select ${obj.name}`}
 		                            title="Select"
@@ -1767,6 +1994,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange }: Fil
         onClose={() => setPreviewModalOpen(false)}
         onDownload={(obj) => handleDownload(obj)}
         onSaved={() => currentBucket && loadObjectsPage(currentBucket, currentPrefix, markerForPage(pageIndex), pageIndex)}
+        onNavigate={handlePreviewNavigate}
       />
 
       {/* Properties Modal */}

@@ -14,6 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	oss "github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 func normalizeRegion(region string) string {
@@ -663,38 +666,50 @@ func (s *OSSService) DeleteObject(config OSSConfig, bucket string, object string
 }
 
 func (s *OSSService) PresignObject(config OSSConfig, bucket string, object string, expiresDuration string) (string, error) {
-	cloudUrl := fmt.Sprintf("oss://%s/%s", bucket, object)
-	region := normalizeRegion(config.Region)
-	endpoint := normalizeEndpoint(config.Endpoint)
+	bucket = strings.TrimSpace(bucket)
+	object = strings.TrimLeft(strings.TrimSpace(object), "/")
 
-	if strings.TrimSpace(expiresDuration) == "" {
+	if bucket == "" {
+		return "", fmt.Errorf("bucket name is required")
+	}
+	if object == "" {
+		return "", fmt.Errorf("object key is required")
+	}
+
+	expiresDuration = strings.TrimSpace(expiresDuration)
+	if expiresDuration == "" {
 		expiresDuration = "15m"
 	}
 
-	args := []string{
-		"presign",
-		cloudUrl,
-		"--access-key-id", config.AccessKeyID,
-		"--access-key-secret", config.AccessKeySecret,
-		"--region", region,
-		"--expires-duration", expiresDuration,
-	}
-
-	if endpoint != "" {
-		args = append(args, "--endpoint", endpoint)
-	}
-
-	output, err := s.runOssutil(args...)
+	expires, err := time.ParseDuration(expiresDuration)
 	if err != nil {
-		return "", fmt.Errorf("presign failed: %s", ossutilOutputOrError(err, output))
+		return "", fmt.Errorf("invalid expires duration: %w", err)
+	}
+	if expires < 0 {
+		return "", fmt.Errorf("invalid expires duration: must be non-negative")
 	}
 
-	url := firstHTTPURL(string(output))
-	if url == "" {
-		return "", fmt.Errorf("presign failed: unexpected output")
+	client, err := sdkClientFromConfig(config)
+	if err != nil {
+		return "", err
+	}
+	bkt, err := client.Bucket(bucket)
+	if err != nil {
+		return "", fmt.Errorf("failed to open bucket: %w", err)
 	}
 
-	return url, nil
+	timeoutSeconds := int64(expires.Seconds())
+	signedURL, err := bkt.SignURL(object, oss.HTTPGet, timeoutSeconds)
+	if err != nil {
+		return "", fmt.Errorf("presign failed: %w", err)
+	}
+
+	parts := strings.SplitN(signedURL, "?", 2)
+	parts[0] = strings.ReplaceAll(parts[0], "%2F", "/")
+	if len(parts) == 2 {
+		return parts[0] + "?" + parts[1], nil
+	}
+	return parts[0], nil
 }
 
 func (s *OSSService) GetObjectText(config OSSConfig, bucket string, object string, maxBytes int) (string, error) {
