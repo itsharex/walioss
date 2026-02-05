@@ -884,6 +884,7 @@ func (s *OSSService) GetSettings() (AppSettings, error) {
 				OssutilPath:        "",
 				Theme:              "dark",
 				MaxTransferThreads: 3,
+				NewTabNameRule:     "folder",
 			}, nil
 		}
 		return AppSettings{}, err
@@ -896,6 +897,16 @@ func (s *OSSService) GetSettings() (AppSettings, error) {
 
 	if settings.MaxTransferThreads <= 0 {
 		settings.MaxTransferThreads = 3
+	}
+
+	settings.NewTabNameRule = strings.TrimSpace(settings.NewTabNameRule)
+	if settings.NewTabNameRule == "" {
+		settings.NewTabNameRule = "folder"
+	}
+	switch settings.NewTabNameRule {
+	case "folder", "newTab":
+	default:
+		settings.NewTabNameRule = "folder"
 	}
 
 	// Apply ossutil path if set; empty means "auto".
@@ -921,6 +932,16 @@ func (s *OSSService) SaveSettings(settings AppSettings) error {
 	}
 	if settings.MaxTransferThreads > 64 {
 		settings.MaxTransferThreads = 64
+	}
+
+	settings.NewTabNameRule = strings.TrimSpace(settings.NewTabNameRule)
+	if settings.NewTabNameRule == "" {
+		settings.NewTabNameRule = "folder"
+	}
+	switch settings.NewTabNameRule {
+	case "folder", "newTab":
+	default:
+		settings.NewTabNameRule = "folder"
 	}
 
 	// Apply ossutil path immediately; empty means "auto".

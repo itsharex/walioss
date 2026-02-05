@@ -24,17 +24,20 @@
 }
 
 .settings-header {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    position: relative;
+    display: flex;
     align-items: center;
-    gap: 16px;
+    justify-content: center;
     margin-bottom: 14px;
     width: 100%;
+    min-height: 36px;
 }
 
 .settings-close-btn {
-    grid-column: 3;
-    justify-self: end;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 .back-btn {
@@ -55,8 +58,7 @@
 .settings-title {
     font-size: 24px;
     font-weight: 600;
-    grid-column: 2;
-    justify-self: center;
+    margin: 0;
     text-align: center;
     pointer-events: none;
 }

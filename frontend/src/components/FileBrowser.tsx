@@ -12,6 +12,7 @@ interface FileBrowserProps {
   config: main.OSSConfig;
   profileName: string | null;
   initialPath?: string;
+  onLocationChange?: (location: { bucket: string; prefix: string }) => void;
 }
 
 // Columns: Name, Size, Type, Last Modified, Actions
@@ -78,7 +79,7 @@ interface ContextMenuState {
   object: main.ObjectInfo | null;
 }
 
-function FileBrowser({ config, profileName, initialPath }: FileBrowserProps) {
+function FileBrowser({ config, profileName, initialPath, onLocationChange }: FileBrowserProps) {
   const [currentBucket, setCurrentBucket] = useState('');
   const [currentPrefix, setCurrentPrefix] = useState('');
   const [navState, setNavState] = useState<{ stack: NavLocation[]; index: number }>({
@@ -376,6 +377,8 @@ function FileBrowser({ config, profileName, initialPath }: FileBrowserProps) {
       setCurrentPrefix(normalizedPrefix);
       loadObjectsFirstPage(normalizedBucket, normalizedPrefix);
     }
+
+    onLocationChange?.({ bucket: normalizedBucket, prefix: normalizedPrefix });
 
     if (opts?.pushHistory === false) return;
     const nextLoc: NavLocation = { bucket: normalizedBucket, prefix: normalizedPrefix };

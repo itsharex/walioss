@@ -446,7 +446,7 @@
 .file-table th {
     text-align: left;
     padding: 10px 12px;
-    background: rgba(12, 16, 32, 0.45);
+    background: #0c1020;
     color: rgba(255, 255, 255, 0.7);
     font-weight: 500;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -775,7 +775,7 @@ body.theme-light .file-browser .file-table-container {
 }
 
 body.theme-light .file-browser .file-table th {
-    background: rgba(15, 23, 42, 0.03);
+    background: #f8fafc;
     color: rgba(15, 23, 42, 0.65);
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }

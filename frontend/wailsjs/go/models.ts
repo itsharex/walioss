@@ -6,6 +6,7 @@ export namespace main {
 	    defaultEndpoint: string;
 	    theme: string;
 	    maxTransferThreads: number;
+	    newTabNameRule: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -18,6 +19,7 @@ export namespace main {
 	        this.defaultEndpoint = source["defaultEndpoint"];
 	        this.theme = source["theme"];
 	        this.maxTransferThreads = source["maxTransferThreads"];
+	        this.newTabNameRule = source["newTabNameRule"];
 	    }
 	}
 	export class BucketInfo {

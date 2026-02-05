@@ -9,15 +9,17 @@ interface SettingsProps {
   onBack: () => void;
   onThemeChange?: (theme: string) => void;
   onNotify?: (toast: { type: 'success' | 'error' | 'info'; message: string }) => void;
+  onSettingsSaved?: (settings: main.AppSettings) => void;
 }
 
-function Settings({ isOpen, onBack, onThemeChange, onNotify }: SettingsProps) {
+function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: SettingsProps) {
   const [settings, setSettings] = useState<main.AppSettings>({
     ossutilPath: '',
     defaultRegion: '',
     defaultEndpoint: '',
     theme: 'dark',
     maxTransferThreads: 3,
+    newTabNameRule: 'folder',
   } as main.AppSettings);
   
   const [loading, setLoading] = useState(false);
@@ -41,7 +43,10 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify }: SettingsProps) {
   const loadSettings = async () => {
     try {
       const loaded = await GetSettings();
-      setSettings(loaded);
+      setSettings({
+        ...loaded,
+        newTabNameRule: loaded?.newTabNameRule === 'newTab' ? 'newTab' : 'folder',
+      });
       if (onThemeChange) {
         onThemeChange(loaded?.theme || 'dark');
       }
@@ -64,6 +69,7 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify }: SettingsProps) {
       if (onThemeChange) {
         onThemeChange(settings.theme);
       }
+      onSettingsSaved?.(settings);
       onNotify?.({ type: 'success', message: 'Settings saved' });
       onBack();
     } catch (err: any) {
@@ -105,6 +111,7 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify }: SettingsProps) {
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-container">
       <div className="settings-header">
+        <h1 className="settings-title">Settings</h1>
         <button
           className="icon-close-btn settings-close-btn"
           type="button"
@@ -114,7 +121,6 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify }: SettingsProps) {
         >
           ×
         </button>
-        <h1 className="settings-title">Settings</h1>
       </div>
 
       <div className="settings-content">
@@ -183,6 +189,28 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify }: SettingsProps) {
                 onClick={() => handleThemeSelect('light')}
               >
                 Light
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="settings-section">
+          <h2 className="section-title">Tabs</h2>
+          <div className="form-group">
+            <label className="form-label">New Tab Naming</label>
+            <div className="theme-toggle">
+              <div
+                className={`theme-option ${settings.newTabNameRule === 'folder' ? 'active' : ''}`}
+                onClick={() => setSettings((prev) => ({ ...prev, newTabNameRule: 'folder' }))}
+              >
+                Current Folder
+              </div>
+              <div
+                className={`theme-option ${settings.newTabNameRule === 'newTab' ? 'active' : ''}`}
+                onClick={() => setSettings((prev) => ({ ...prev, newTabNameRule: 'newTab' }))}
+              >
+                New Tab
               </div>
             </div>
           </div>

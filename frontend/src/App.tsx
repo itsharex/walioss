@@ -14,6 +14,9 @@ type GlobalView = 'session' | 'settings';
 type AppTab = {
   id: string;
   title: string;
+  isCustomTitle: boolean;
+  bucket: string;
+  prefix: string;
 };
 
 type TransferStatus = 'queued' | 'in-progress' | 'success' | 'error';
@@ -43,13 +46,14 @@ type Toast = { id: number; type: ToastType; message: string };
 function App() {
   const [globalView, setGlobalView] = useState<GlobalView>('session');
   const [theme, setTheme] = useState<string>('dark');
+  const [newTabNameRule, setNewTabNameRule] = useState<'folder' | 'newTab'>('folder');
   const nextTabNumber = useRef(2);
 
   const [sessionConfig, setSessionConfig] = useState<main.OSSConfig | null>(null);
   const [sessionProfileName, setSessionProfileName] = useState<string | null>(null);
 
   const [tabs, setTabs] = useState<AppTab[]>([
-    { id: 't1', title: 'New Tab' },
+    { id: 't1', title: 'Buckets', isCustomTitle: false, bucket: '', prefix: '' },
   ]);
   const [activeTabId, setActiveTabId] = useState<string>('t1');
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
@@ -76,16 +80,48 @@ function App() {
   };
 
   useEffect(() => {
-    const applySavedTheme = async () => {
+  const applySavedTheme = async () => {
       try {
         const settings = await GetSettings();
         handleThemeChange(settings?.theme || 'dark');
+        setNewTabNameRule(settings?.newTabNameRule === 'newTab' ? 'newTab' : 'folder');
       } catch {
         handleThemeChange('dark');
       }
     };
     applySavedTheme();
   }, []);
+
+  const folderNameFromPrefix = (prefix: string) => {
+    const trimmed = (prefix || '').replace(/\/+$/, '');
+    if (!trimmed) return '';
+    const parts = trimmed.split('/').filter(Boolean);
+    return parts[parts.length - 1] || '';
+  };
+
+  const autoTitleFromLocation = (bucket: string, prefix: string) => {
+    if (!bucket) return 'Buckets';
+    const folder = folderNameFromPrefix(prefix);
+    return folder || bucket;
+  };
+
+  const parseOssPathLocation = (path: string | undefined | null) => {
+    let p = (path || '').trim();
+    if (!p) return { bucket: '', prefix: '' };
+    if (p.startsWith('oss://')) p = p.slice(6);
+    p = p.replace(/^\/+/, '');
+    if (!p) return { bucket: '', prefix: '' };
+    const parts = p.split('/').filter(Boolean);
+    const bucket = parts[0] || '';
+    const prefixPart = parts.slice(1).join('/');
+    const prefix = prefixPart ? (prefixPart.endsWith('/') ? prefixPart : `${prefixPart}/`) : '';
+    return { bucket, prefix };
+  };
+
+  const defaultTabTitleForRule = (rule: 'folder' | 'newTab', bucket: string, prefix: string) => {
+    if (rule === 'newTab') return 'New Tab';
+    return autoTitleFromLocation(bucket, prefix);
+  };
 
   const showToast = (type: ToastType, message: string, timeoutMs = 2600) => {
     const id = Date.now();
@@ -147,17 +183,30 @@ function App() {
   const TitlebarDrag = () => <div className="titlebar-drag" />;
 
   const handleLoginSuccess = (config: main.OSSConfig, profileName?: string | null) => {
+    const initialLoc = parseOssPathLocation(config?.defaultPath);
     setSessionConfig(config);
     setGlobalView('session');
     setSessionProfileName(profileName || null);
     setTransfers([]);
     setShowTransfers(false);
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.isCustomTitle
+          ? t
+          : {
+              ...t,
+              bucket: initialLoc.bucket,
+              prefix: initialLoc.prefix,
+              title: defaultTabTitleForRule(newTabNameRule, initialLoc.bucket, initialLoc.prefix),
+            },
+      ),
+    );
   };
 
   const handleLogout = () => {
     setSessionConfig(null);
     setGlobalView('session');
-    setTabs([{ id: 't1', title: 'New Tab' }]);
+    setTabs([{ id: 't1', title: 'Buckets', isCustomTitle: false, bucket: '', prefix: '' }]);
     setActiveTabId('t1');
     nextTabNumber.current = 2;
     setSessionProfileName(null);
@@ -174,7 +223,9 @@ function App() {
     if (!sessionConfig) return;
     const number = nextTabNumber.current++;
     const id = `t${number}`;
-    setTabs((prev) => [...prev, { id, title: 'New Tab' }]);
+    const initialLoc = parseOssPathLocation(sessionConfig?.defaultPath);
+    const title = defaultTabTitleForRule(newTabNameRule, initialLoc.bucket, initialLoc.prefix);
+    setTabs((prev) => [...prev, { id, title, isCustomTitle: false, bucket: initialLoc.bucket, prefix: initialLoc.prefix }]);
     openTab(id);
   };
 
@@ -191,8 +242,37 @@ function App() {
   const commitRename = () => {
     if (!renamingTabId) return;
     const title = renameValue.trim() || 'New Tab';
-    setTabs((prev) => prev.map((t) => (t.id === renamingTabId ? { ...t, title } : t)));
+    setTabs((prev) =>
+      prev.map((t) => (t.id === renamingTabId ? { ...t, title, isCustomTitle: true } : t)),
+    );
     cancelRename();
+  };
+
+  const handleTabLocationChange = (tabId: string, bucket: string, prefix: string) => {
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.id !== tabId) return t;
+        const next = { ...t, bucket, prefix };
+        if (!t.isCustomTitle && newTabNameRule === 'folder') {
+          const nextTitle = autoTitleFromLocation(bucket, prefix);
+          if (nextTitle && nextTitle !== t.title) {
+            next.title = nextTitle;
+          }
+        }
+        return next;
+      }),
+    );
+  };
+
+  const applyNewTabNameRule = (rule: 'folder' | 'newTab') => {
+    setNewTabNameRule(rule);
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.isCustomTitle) return t;
+        const title = defaultTabTitleForRule(rule, t.bucket, t.prefix);
+        return { ...t, title };
+      }),
+    );
   };
 
   const closeTab = (tabId: string) => {
@@ -348,23 +428,25 @@ function App() {
             <Login onLoginSuccess={handleLoginSuccess} />
           ) : (
             <div className="window-stack">
-              {tabs.map((t) => (
-                <div key={t.id} className={`window-panel ${t.id === activeTabId ? 'active' : ''}`}>
-                  <FileBrowser
-                    config={sessionConfig}
-                    profileName={sessionProfileName}
-                    initialPath={sessionConfig.defaultPath}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+	              {tabs.map((t) => (
+	                <div key={t.id} className={`window-panel ${t.id === activeTabId ? 'active' : ''}`}>
+	                  <FileBrowser
+	                    config={sessionConfig}
+	                    profileName={sessionProfileName}
+	                    initialPath={sessionConfig.defaultPath}
+	                    onLocationChange={(loc) => handleTabLocationChange(t.id, loc.bucket, loc.prefix)}
+	                  />
+	                </div>
+	              ))}
+	            </div>
+	          )}
         </main>
         <Settings
           isOpen={globalView === 'settings'}
           onBack={() => setGlobalView('session')}
           onThemeChange={handleThemeChange}
           onNotify={(t) => showToast(t.type, t.message)}
+          onSettingsSaved={(settings) => applyNewTabNameRule(settings?.newTabNameRule === 'newTab' ? 'newTab' : 'folder')}
         />
         <TransferModal
           isOpen={showTransfers}
