@@ -982,103 +982,105 @@ function FileBrowser({ config, profileName, initialPath }: FileBrowserProps) {
                 <span className="empty-icon">📂</span>
                 <p>Folder is empty.</p>
              </div>
-          ) : (
-            <div className="file-table-container" ref={tableContainerRef}>
-              <table className="file-table">
-                <colgroup>
-                  {columnWidths.map((w, i) => (
-                    <col key={i} style={{ width: `${w}px` }} />
-                  ))}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="resizable">
-                      <span className="th-label">Name</span>
-                      <div className="col-resizer" onPointerDown={(e) => startColumnResize(0, e)} />
-                    </th>
-                    <th className="resizable">
-                      <span className="th-label">Size</span>
-                      <div className="col-resizer" onPointerDown={(e) => startColumnResize(1, e)} />
-                    </th>
-                    <th className="resizable">
-                      <span className="th-label">Type</span>
-                      <div className="col-resizer" onPointerDown={(e) => startColumnResize(2, e)} />
-                    </th>
-                    <th className="resizable">
-                      <span className="th-label">Last Modified</span>
-                      <div className="col-resizer" onPointerDown={(e) => startColumnResize(3, e)} />
-                    </th>
-                    <th>
-                      <span className="th-label">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {objects.map((obj) => (
-                    <tr 
-                      key={obj.path || obj.name} 
-                      onClick={() => (isFolder(obj) ? handleFolderClick(obj.name) : handlePreview(obj))}
-                      onContextMenu={(e) => handleContextMenu(e, obj)}
-                    >
-                      <td className="file-name-td">
-                        <div className="file-name-cell">
-                          <div className={`file-icon ${isFolder(obj) ? 'folder-icon' : 'item-icon'}`}>
-                             {isFolder(obj) ? (
-                               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                 <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
-                               </svg>
-                             ) : (
-                               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                 <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-                               </svg>
-                             )}
-                          </div>
-                          <span className="file-name-text">{obj.name}</span>
-                        </div>
-                      </td>
-                      <td>{!isFolder(obj) ? formatSize(obj.size) : '-'}</td>
-                      <td>{displayType(obj)}</td>
-                      <td>{obj.lastModified || '-'}</td>
-                      <td className="file-actions-td">
-                        <div className="file-actions">
-                          {isFolder(obj) ? (
-                            <button
-                              className="link-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleFolderClick(obj.name);
-                              }}
-                            >
-                              Open
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                className="link-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePreview(obj);
-                                }}
-                              >
-                                Preview
-                              </button>
-                              <button
-                                className="link-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDownload(obj);
-                                }}
-                              >
-                                Download
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-	                </tbody>
-	              </table>
+	          ) : (
+	            <div className="file-table-container" ref={tableContainerRef}>
+	              <div className="file-table-scroll">
+	                <table className="file-table">
+	                  <colgroup>
+	                    {columnWidths.map((w, i) => (
+	                      <col key={i} style={{ width: `${w}px` }} />
+	                    ))}
+	                  </colgroup>
+	                  <thead>
+	                    <tr>
+	                      <th className="resizable">
+	                        <span className="th-label">Name</span>
+	                        <div className="col-resizer" onPointerDown={(e) => startColumnResize(0, e)} />
+	                      </th>
+	                      <th className="resizable">
+	                        <span className="th-label">Size</span>
+	                        <div className="col-resizer" onPointerDown={(e) => startColumnResize(1, e)} />
+	                      </th>
+	                      <th className="resizable">
+	                        <span className="th-label">Type</span>
+	                        <div className="col-resizer" onPointerDown={(e) => startColumnResize(2, e)} />
+	                      </th>
+	                      <th className="resizable">
+	                        <span className="th-label">Last Modified</span>
+	                        <div className="col-resizer" onPointerDown={(e) => startColumnResize(3, e)} />
+	                      </th>
+	                      <th>
+	                        <span className="th-label">Actions</span>
+	                      </th>
+	                    </tr>
+	                  </thead>
+	                  <tbody>
+	                    {objects.map((obj) => (
+	                      <tr
+	                        key={obj.path || obj.name}
+	                        onClick={() => (isFolder(obj) ? handleFolderClick(obj.name) : handlePreview(obj))}
+	                        onContextMenu={(e) => handleContextMenu(e, obj)}
+	                      >
+	                        <td className="file-name-td">
+	                          <div className="file-name-cell">
+	                            <div className={`file-icon ${isFolder(obj) ? 'folder-icon' : 'item-icon'}`}>
+	                               {isFolder(obj) ? (
+	                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+	                                   <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+	                                 </svg>
+	                               ) : (
+	                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+	                                   <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+	                                 </svg>
+	                               )}
+	                            </div>
+	                            <span className="file-name-text">{obj.name}</span>
+	                          </div>
+	                        </td>
+	                        <td>{!isFolder(obj) ? formatSize(obj.size) : '-'}</td>
+	                        <td>{displayType(obj)}</td>
+	                        <td>{obj.lastModified || '-'}</td>
+	                        <td className="file-actions-td">
+	                          <div className="file-actions">
+	                            {isFolder(obj) ? (
+	                              <button
+	                                className="link-btn"
+	                                onClick={(e) => {
+	                                  e.stopPropagation();
+	                                  handleFolderClick(obj.name);
+	                                }}
+	                              >
+	                                Open
+	                              </button>
+	                            ) : (
+	                              <>
+	                                <button
+	                                  className="link-btn"
+	                                  onClick={(e) => {
+	                                    e.stopPropagation();
+	                                    handlePreview(obj);
+	                                  }}
+	                                >
+	                                  Preview
+	                                </button>
+	                                <button
+	                                  className="link-btn"
+	                                  onClick={(e) => {
+	                                    e.stopPropagation();
+	                                    handleDownload(obj);
+	                                  }}
+	                                >
+	                                  Download
+	                                </button>
+	                              </>
+	                            )}
+	                          </div>
+	                        </td>
+	                      </tr>
+	                    ))}
+	                  </tbody>
+	                </table>
+	              </div>
 	              <div className="file-table-footer">
 	                <div className="page-status">
 	                  Page {pageIndex}
