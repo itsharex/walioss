@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import './Login.css';
 import { TestConnection, LoadProfiles, SaveProfile, GetDefaultProfile, CheckOssutilInstalled } from '../../wailsjs/go/main/OSSService';
 import { main } from '../../wailsjs/go/models';
+import ProfilePicker from '../components/ProfilePicker';
 
 interface LoginProps {
   onLoginSuccess: (config: main.OSSConfig, profileName?: string | null) => void;
@@ -170,18 +171,7 @@ function Login({ onLoginSuccess }: LoginProps) {
         <div className="login-form">
           {profiles.length > 0 && (
             <div className="profile-section">
-              <select 
-                className="profile-select"
-                value={selectedProfile}
-                onChange={(e) => handleProfileChange(e.target.value)}
-              >
-                <option value="">Select a profile...</option>
-                {profiles.map(p => (
-                  <option key={p.name} value={p.name}>
-                    {p.name} {p.isDefault ? '(Default)' : ''}
-                  </option>
-                ))}
-              </select>
+              <ProfilePicker profiles={profiles} value={selectedProfile} onChange={handleProfileChange} />
             </div>
           )}
 

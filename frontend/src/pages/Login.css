@@ -119,6 +119,224 @@
   color: #ffffff;
 }
 
+.profile-picker {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-picker-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #ffffff;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.profile-picker-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.profile-picker-btn:focus-visible {
+  border-color: rgba(79, 172, 254, 0.5);
+  box-shadow: 0 0 0 4px rgba(79, 172, 254, 0.15);
+}
+
+.profile-picker.open .profile-picker-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(79, 172, 254, 0.35);
+}
+
+.profile-picker-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-picker-title {
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-picker-subtitle {
+  font-size: 12px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-picker-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.profile-picker-chevron {
+  opacity: 0.75;
+  display: inline-flex;
+  align-items: center;
+}
+
+.profile-badge {
+  background: rgba(79, 172, 254, 0.18);
+  border: 1px solid rgba(79, 172, 254, 0.35);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.profile-badge.small {
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+.profile-picker-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: #1e1e36;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  z-index: 600;
+  animation: fadeIn 0.12s ease;
+}
+
+.profile-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.profile-picker-search-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #ffffff;
+  outline: none;
+  font-size: 13px;
+}
+
+.profile-picker-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.profile-picker-search-input:focus {
+  border-color: rgba(79, 172, 254, 0.5);
+  box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.14);
+}
+
+.profile-picker-clear {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.profile-picker-clear:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.profile-picker-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.profile-picker-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.profile-picker-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.profile-picker-item.active {
+  background: rgba(79, 172, 254, 0.12);
+  border-color: rgba(79, 172, 254, 0.25);
+}
+
+.profile-picker-item.selected {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.profile-picker-item-main {
+  min-width: 0;
+}
+
+.profile-picker-item-name {
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-picker-item-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.profile-picker-empty {
+  padding: 10px 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
 .btn-icon {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -319,6 +537,70 @@ body.theme-light .login-container .profile-select {
 body.theme-light .login-container .profile-select option {
   background: #ffffff;
   color: #0f172a;
+}
+
+body.theme-light .login-container .profile-picker-btn {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+}
+
+body.theme-light .login-container .profile-picker-btn:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(15, 23, 42, 0.16);
+}
+
+body.theme-light .login-container .profile-picker-subtitle {
+  color: rgba(15, 23, 42, 0.55);
+}
+
+body.theme-light .login-container .profile-picker-popover {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 18px 50px -12px rgba(15, 23, 42, 0.25);
+}
+
+body.theme-light .login-container .profile-picker-search {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .login-container .profile-picker-search-input {
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+}
+
+body.theme-light .login-container .profile-picker-search-input::placeholder {
+  color: rgba(15, 23, 42, 0.35);
+}
+
+body.theme-light .login-container .profile-picker-clear {
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: rgba(15, 23, 42, 0.75);
+}
+
+body.theme-light .login-container .profile-picker-item {
+  color: rgba(15, 23, 42, 0.92);
+}
+
+body.theme-light .login-container .profile-picker-item:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+body.theme-light .login-container .profile-picker-item.active {
+  background: rgba(2, 132, 199, 0.1);
+  border-color: rgba(2, 132, 199, 0.22);
+}
+
+body.theme-light .login-container .profile-picker-item-sub {
+  color: rgba(15, 23, 42, 0.55);
+}
+
+body.theme-light .login-container .profile-badge {
+  background: rgba(2, 132, 199, 0.12);
+  border-color: rgba(2, 132, 199, 0.22);
+  color: rgba(15, 23, 42, 0.92);
 }
 
 body.theme-light .login-container .btn-secondary {
