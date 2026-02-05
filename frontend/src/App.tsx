@@ -81,6 +81,21 @@ function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
   useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      const tag = target.tagName?.toLowerCase?.() || '';
+      if (tag === 'input' || tag === 'textarea' || target.isContentEditable) return;
+
+      e.preventDefault();
+    };
+
+    window.addEventListener('contextmenu', handler);
+    return () => window.removeEventListener('contextmenu', handler);
+  }, []);
+
+  useEffect(() => {
     if (!tabs.some((t) => t.id === activeTabId)) {
       setActiveTabId(tabs[0]?.id ?? 't1');
     }

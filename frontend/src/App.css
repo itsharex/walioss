@@ -18,6 +18,18 @@ body {
     color: #ffffff;
     text-align: left;
     transition: background-color 220ms ease, color 220ms ease;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+input,
+textarea,
+pre,
+code,
+[contenteditable="true"],
+[contenteditable=""] {
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 .toast {
