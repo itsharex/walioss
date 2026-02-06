@@ -4,7 +4,7 @@
 Walioss is a desktop Alibaba Cloud OSS client built with Wails + React.
 It is designed for daily bucket/object operations with a native-app style workflow: profile-based login, tabbed browsing, paged object listing, previews, bookmarks, and transfer tracking.
 
-Current app version: `v0.1.0`.
+Current app version: `v0.2.0`.
 
 ## Screenshots
 
@@ -122,15 +122,15 @@ Build output is generated under `build/bin`.
 ## GitHub release automation
 
 This repo includes `.github/workflows/release.yml`:
-- Trigger: push tag matching `v*` (for example `v0.1.0`)
+- Trigger: push tag matching `v*` (for example `v0.2.0`)
 - Platform: macOS build only
 - Output: zipped app artifact attached to GitHub Release
 
 Example:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 ## Local data
