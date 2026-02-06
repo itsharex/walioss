@@ -62,6 +62,10 @@ export function GetSettings() {
   return window['go']['main']['OSSService']['GetSettings']();
 }
 
+export function GetTransferHistory() {
+  return window['go']['main']['OSSService']['GetTransferHistory']();
+}
+
 export function ListBuckets(arg1) {
   return window['go']['main']['OSSService']['ListBuckets'](arg1);
 }

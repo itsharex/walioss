@@ -33,6 +33,8 @@ export function GetProfile(arg1:string):Promise<main.OSSProfile>;
 
 export function GetSettings():Promise<main.AppSettings>;
 
+export function GetTransferHistory():Promise<Array<main.TransferUpdate>>;
+
 export function ListBuckets(arg1:main.OSSConfig):Promise<Array<main.BucketInfo>>;
 
 export function ListObjects(arg1:main.OSSConfig,arg2:string,arg3:string):Promise<Array<main.ObjectInfo>>;

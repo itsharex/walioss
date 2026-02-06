@@ -63,15 +63,21 @@ func suggestServiceEndpoint(region string) string {
 
 // OSSService handles OSS operations via ossutil
 type OSSService struct {
-	ossutilPath        string
-	defaultOssutilPath string
-	defaultConfigDir   string
-	configDir          string
-	transferSeq        uint64
-	transferCtxMu      sync.RWMutex
-	transferCtx        context.Context
-	transferLimiterMu  sync.RWMutex
-	transferLimiter    *transferLimiter
+	ossutilPath                  string
+	defaultOssutilPath           string
+	defaultConfigDir             string
+	configDir                    string
+	transferSeq                  uint64
+	transferCtxMu                sync.RWMutex
+	transferCtx                  context.Context
+	transferLimiterMu            sync.RWMutex
+	transferLimiter              *transferLimiter
+	transferHistoryMu            sync.Mutex
+	transferHistoryByID          map[string]TransferUpdate
+	transferHistoryOrder         []string
+	transferHistoryLoaded        bool
+	transferHistoryLoadedDir     string
+	transferHistoryLastPersistAt time.Time
 }
 
 const (
@@ -274,11 +280,13 @@ func NewOSSService() *OSSService {
 	}
 
 	return &OSSService{
-		ossutilPath:        ossutilPath,
-		defaultOssutilPath: ossutilPath,
-		defaultConfigDir:   defaultConfigDir,
-		configDir:          configDir,
-		transferLimiter:    newTransferLimiter(3),
+		ossutilPath:          ossutilPath,
+		defaultOssutilPath:   ossutilPath,
+		defaultConfigDir:     defaultConfigDir,
+		configDir:            configDir,
+		transferLimiter:      newTransferLimiter(3),
+		transferHistoryByID:  make(map[string]TransferUpdate),
+		transferHistoryOrder: make([]string, 0, 64),
 	}
 }
 
@@ -1217,11 +1225,13 @@ func (s *OSSService) SaveSettings(settings AppSettings) error {
 
 	nextSettings := normalizeAppSettings(settings, s.defaultConfigDir)
 	targetDir := nextSettings.WorkDir
+	previousDir := s.configDir
 	state.Settings = nextSettings
 
 	if err := s.saveAppStateToDir(targetDir, state); err != nil {
 		return err
 	}
+	s.copyTransferHistoryIfNeeded(previousDir, targetDir)
 	s.configDir = targetDir
 	if err := s.writeWorkDirRef(targetDir); err != nil {
 		return err

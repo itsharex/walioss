@@ -180,6 +180,58 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class TransferUpdate {
+	    id: string;
+	    type: string;
+	    status: string;
+	    name: string;
+	    bucket: string;
+	    key: string;
+	    localPath?: string;
+	    parentId?: string;
+	    isGroup?: boolean;
+	    fileCount?: number;
+	    doneCount?: number;
+	    successCount?: number;
+	    errorCount?: number;
+	    totalBytes?: number;
+	    doneBytes?: number;
+	    speedBytesPerSec?: number;
+	    etaSeconds?: number;
+	    message?: string;
+	    startedAtMs?: number;
+	    updatedAtMs?: number;
+	    finishedAtMs?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TransferUpdate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.type = source["type"];
+	        this.status = source["status"];
+	        this.name = source["name"];
+	        this.bucket = source["bucket"];
+	        this.key = source["key"];
+	        this.localPath = source["localPath"];
+	        this.parentId = source["parentId"];
+	        this.isGroup = source["isGroup"];
+	        this.fileCount = source["fileCount"];
+	        this.doneCount = source["doneCount"];
+	        this.successCount = source["successCount"];
+	        this.errorCount = source["errorCount"];
+	        this.totalBytes = source["totalBytes"];
+	        this.doneBytes = source["doneBytes"];
+	        this.speedBytesPerSec = source["speedBytesPerSec"];
+	        this.etaSeconds = source["etaSeconds"];
+	        this.message = source["message"];
+	        this.startedAtMs = source["startedAtMs"];
+	        this.updatedAtMs = source["updatedAtMs"];
+	        this.finishedAtMs = source["finishedAtMs"];
+	    }
+	}
 
 }
 

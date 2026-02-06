@@ -6,7 +6,7 @@ import AboutModal from './components/AboutModal';
 import FileBrowser from './components/FileBrowser';
 import TransferModal from './components/TransferModal';
 import { main } from '../wailsjs/go/models';
-import { EnqueueUploadPaths, GetSettings, MoveObject } from '../wailsjs/go/main/OSSService';
+import { EnqueueUploadPaths, GetSettings, GetTransferHistory, MoveObject } from '../wailsjs/go/main/OSSService';
 import { GetAppInfo, OpenFile, OpenInFinder } from '../wailsjs/go/main/App';
 import { EventsEmit, EventsOn, OnFileDrop, OnFileDropOff } from '../wailsjs/runtime/runtime';
 import { canReadOssDragPayload, readOssDragPayload } from './ossDrag';
@@ -204,6 +204,54 @@ function App() {
     return autoTitleFromLocation(bucket, prefix);
   };
 
+  const toTransferItem = useCallback((update: any, previous?: TransferItem): TransferItem => {
+    return {
+      id: update.id,
+      name: update.name || previous?.name || 'Transfer',
+      type: update.type,
+      bucket: update.bucket,
+      key: update.key,
+      parentId: update.parentId,
+      isGroup: !!update.isGroup,
+      fileCount: update.fileCount,
+      doneCount: update.doneCount,
+      successCount: update.successCount,
+      errorCount: update.errorCount,
+      status: update.status,
+      message: update.message,
+      localPath: update.localPath,
+      totalBytes: update.totalBytes,
+      doneBytes: update.doneBytes,
+      speedBytesPerSec: update.speedBytesPerSec,
+      etaSeconds: update.etaSeconds,
+      startedAtMs: update.startedAtMs,
+      updatedAtMs: update.updatedAtMs,
+      finishedAtMs: update.finishedAtMs,
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTransferHistory = async () => {
+      try {
+        const history = await GetTransferHistory();
+        if (cancelled || !Array.isArray(history)) {
+          return;
+        }
+        const normalized = history
+          .filter((item: any) => !!item?.id)
+          .map((item: any) => toTransferItem(item));
+        setTransfers(normalized);
+      } catch (error) {
+        console.error('Failed to load transfer history:', error);
+      }
+    };
+    void loadTransferHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [toTransferItem]);
+
   const showToast = useCallback((type: ToastType, message: string, timeoutMs = 2600) => {
     const id = Date.now();
     setToast({ id, type, message });
@@ -253,29 +301,7 @@ function App() {
 
       setTransfers((prev) => {
         const index = prev.findIndex((t) => t.id === update.id);
-        const next: TransferItem = {
-          id: update.id,
-          name: update.name || (index >= 0 ? prev[index].name : 'Transfer'),
-          type: update.type,
-          bucket: update.bucket,
-          key: update.key,
-          parentId: update.parentId,
-          isGroup: !!update.isGroup,
-          fileCount: update.fileCount,
-          doneCount: update.doneCount,
-          successCount: update.successCount,
-          errorCount: update.errorCount,
-          status: update.status,
-          message: update.message,
-          localPath: update.localPath,
-          totalBytes: update.totalBytes,
-          doneBytes: update.doneBytes,
-          speedBytesPerSec: update.speedBytesPerSec,
-          etaSeconds: update.etaSeconds,
-          startedAtMs: update.startedAtMs,
-          updatedAtMs: update.updatedAtMs,
-          finishedAtMs: update.finishedAtMs,
-        };
+        const next: TransferItem = toTransferItem(update, index >= 0 ? prev[index] : undefined);
 
         if (index === -1) {
           return [next, ...prev];
@@ -287,7 +313,7 @@ function App() {
       });
     });
     return () => off();
-  }, []);
+  }, [toTransferItem]);
 
   useEffect(() => {
     const off = EventsOn('app:about', () => {
@@ -332,7 +358,6 @@ function App() {
     setSessionConfig(config);
     setGlobalView('session');
     setSessionProfileName(profileName || null);
-    setTransfers([]);
     setShowTransfers(false);
     setTabs((prev) =>
       prev.map((t) =>
@@ -355,7 +380,6 @@ function App() {
     setActiveTabId('t1');
     nextTabNumber.current = 2;
     setSessionProfileName(null);
-    setTransfers([]);
     setShowTransfers(false);
     setDragOverTabId(null);
     setDraggingTabId(null);

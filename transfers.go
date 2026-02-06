@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +38,12 @@ const (
 	TransferStatusInProgress TransferStatus = "in-progress"
 	TransferStatusSuccess    TransferStatus = "success"
 	TransferStatusError      TransferStatus = "error"
+)
+
+const (
+	transferHistoryFileName        = "transfers.json"
+	maxTransferHistoryRecords      = 3000
+	transferHistoryPersistInterval = 500 * time.Millisecond
 )
 
 type TransferUpdate struct {
@@ -123,6 +131,7 @@ func (s *OSSService) emitTransferUpdate(update TransferUpdate) {
 }
 
 func (s *OSSService) emitTransfer(update TransferUpdate, onUpdate func(TransferUpdate)) {
+	s.recordTransferUpdate(update)
 	s.emitTransferUpdate(update)
 	if onUpdate != nil {
 		onUpdate(update)
@@ -146,6 +155,206 @@ func (s *OSSService) setMaxTransferThreads(max int) {
 		return
 	}
 	s.transferLimiter.SetMax(max)
+}
+
+func transferSortTimestamp(update TransferUpdate) int64 {
+	if update.UpdatedAtMs > 0 {
+		return update.UpdatedAtMs
+	}
+	if update.FinishedAtMs > 0 {
+		return update.FinishedAtMs
+	}
+	return update.StartedAtMs
+}
+
+func isTransferFinalStatus(status TransferStatus) bool {
+	return status == TransferStatusSuccess || status == TransferStatusError
+}
+
+func (s *OSSService) transferHistoryPathIn(dir string) string {
+	return filepath.Join(dir, transferHistoryFileName)
+}
+
+func (s *OSSService) copyTransferHistoryIfNeeded(previousDir string, nextDir string) {
+	previousDir = normalizeWorkDirPath(previousDir, s.defaultConfigDir)
+	nextDir = normalizeWorkDirPath(nextDir, s.defaultConfigDir)
+	if previousDir == "" || nextDir == "" || previousDir == nextDir {
+		return
+	}
+
+	previousPath := s.transferHistoryPathIn(previousDir)
+	newPath := s.transferHistoryPathIn(nextDir)
+
+	if _, err := os.Stat(newPath); err == nil {
+		return
+	}
+
+	data, err := os.ReadFile(previousPath)
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(newPath), 0o700); err != nil {
+		return
+	}
+	_ = os.WriteFile(newPath, data, 0o600)
+}
+
+func (s *OSSService) trimTransferHistoryLocked() {
+	if maxTransferHistoryRecords < 1 {
+		return
+	}
+	overflow := len(s.transferHistoryOrder) - maxTransferHistoryRecords
+	if overflow <= 0 {
+		return
+	}
+	for i := 0; i < overflow; i++ {
+		delete(s.transferHistoryByID, s.transferHistoryOrder[i])
+	}
+	s.transferHistoryOrder = append([]string(nil), s.transferHistoryOrder[overflow:]...)
+}
+
+func (s *OSSService) transferHistorySnapshotLocked() []TransferUpdate {
+	if len(s.transferHistoryByID) == 0 {
+		return []TransferUpdate{}
+	}
+	items := make([]TransferUpdate, 0, len(s.transferHistoryByID))
+	for _, id := range s.transferHistoryOrder {
+		if item, ok := s.transferHistoryByID[id]; ok {
+			items = append(items, item)
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		left := transferSortTimestamp(items[i])
+		right := transferSortTimestamp(items[j])
+		if left == right {
+			return items[i].ID > items[j].ID
+		}
+		return left > right
+	})
+	return items
+}
+
+func (s *OSSService) transferHistoryPersistPlanLocked(force bool) (string, []TransferUpdate, bool) {
+	now := time.Now()
+	if !force && !s.transferHistoryLastPersistAt.IsZero() && now.Sub(s.transferHistoryLastPersistAt) < transferHistoryPersistInterval {
+		return "", nil, false
+	}
+	s.transferHistoryLastPersistAt = now
+	return s.transferHistoryPathIn(s.transferHistoryLoadedDir), s.transferHistorySnapshotLocked(), true
+}
+
+func (s *OSSService) persistTransferHistory(path string, history []TransferUpdate) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(history, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+func (s *OSSService) ensureTransferHistoryLoadedLocked() {
+	dir := normalizeWorkDirPath(s.configDir, s.defaultConfigDir)
+	if s.transferHistoryLoaded && s.transferHistoryLoadedDir == dir {
+		if s.transferHistoryByID == nil {
+			s.transferHistoryByID = make(map[string]TransferUpdate)
+		}
+		return
+	}
+
+	s.transferHistoryLoaded = true
+	s.transferHistoryLoadedDir = dir
+	s.transferHistoryLastPersistAt = time.Time{}
+	s.transferHistoryByID = make(map[string]TransferUpdate)
+	s.transferHistoryOrder = make([]string, 0, 128)
+
+	data, err := os.ReadFile(s.transferHistoryPathIn(dir))
+	if err != nil {
+		return
+	}
+
+	var history []TransferUpdate
+	if err := json.Unmarshal(data, &history); err != nil {
+		return
+	}
+
+	now := time.Now().UnixMilli()
+	for _, item := range history {
+		id := strings.TrimSpace(item.ID)
+		if id == "" {
+			continue
+		}
+
+		if item.Status == TransferStatusQueued || item.Status == TransferStatusInProgress {
+			item.Status = TransferStatusError
+			if strings.TrimSpace(item.Message) == "" {
+				item.Message = "Interrupted when application exited"
+			}
+			item.SpeedBytesPerSec = 0
+			item.EtaSeconds = 0
+			if item.FinishedAtMs == 0 {
+				item.FinishedAtMs = now
+			}
+			if item.UpdatedAtMs == 0 || item.UpdatedAtMs < item.FinishedAtMs {
+				item.UpdatedAtMs = item.FinishedAtMs
+			}
+		}
+
+		if existing, exists := s.transferHistoryByID[id]; exists {
+			if transferSortTimestamp(item) >= transferSortTimestamp(existing) {
+				s.transferHistoryByID[id] = item
+			}
+			continue
+		}
+
+		s.transferHistoryByID[id] = item
+		s.transferHistoryOrder = append(s.transferHistoryOrder, id)
+	}
+
+	s.trimTransferHistoryLocked()
+}
+
+func (s *OSSService) recordTransferUpdate(update TransferUpdate) {
+	id := strings.TrimSpace(update.ID)
+	if id == "" {
+		return
+	}
+	if update.UpdatedAtMs == 0 {
+		update.UpdatedAtMs = time.Now().UnixMilli()
+	}
+
+	forcePersist := isTransferFinalStatus(update.Status)
+
+	s.transferHistoryMu.Lock()
+	s.ensureTransferHistoryLoadedLocked()
+
+	if _, exists := s.transferHistoryByID[id]; !exists {
+		s.transferHistoryOrder = append(s.transferHistoryOrder, id)
+	}
+	s.transferHistoryByID[id] = update
+	s.trimTransferHistoryLocked()
+
+	path, snapshot, shouldPersist := s.transferHistoryPersistPlanLocked(forcePersist)
+	s.transferHistoryMu.Unlock()
+
+	if !shouldPersist {
+		return
+	}
+	_ = s.persistTransferHistory(path, snapshot)
+}
+
+func (s *OSSService) GetTransferHistory() ([]TransferUpdate, error) {
+	s.transferHistoryMu.Lock()
+	s.ensureTransferHistoryLoadedLocked()
+	path, snapshot, shouldPersist := s.transferHistoryPersistPlanLocked(false)
+	s.transferHistoryMu.Unlock()
+
+	if shouldPersist {
+		_ = s.persistTransferHistory(path, snapshot)
+	}
+	return snapshot, nil
 }
 
 type uploadFilePlan struct {
