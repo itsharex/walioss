@@ -15,6 +15,7 @@ interface SettingsProps {
 function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: SettingsProps) {
   const [settings, setSettings] = useState<main.AppSettings>({
     ossutilPath: '',
+    workDir: '~/.walioss',
     defaultRegion: '',
     defaultEndpoint: '',
     theme: 'dark',
@@ -23,6 +24,8 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
   } as main.AppSettings);
 
   const [loading, setLoading] = useState(false);
+  const [testingDriver, setTestingDriver] = useState(false);
+  const [driverStatus, setDriverStatus] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -45,13 +48,27 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
       const loaded = await GetSettings();
       setSettings({
         ...loaded,
+        workDir: loaded?.workDir || '~/.walioss',
         newTabNameRule: loaded?.newTabNameRule === 'newTab' ? 'newTab' : 'folder',
       });
       if (onThemeChange) {
         onThemeChange(loaded?.theme || 'dark');
       }
+
+      const result = await CheckOssutilInstalled();
+      if (result.success) {
+        const versionLine =
+          (result.message || '')
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .find((line) => !!line) || result.message || 'Detected';
+        setDriverStatus({ type: 'success', text: `ossutil version: ${versionLine}` });
+      } else {
+        setDriverStatus({ type: 'error', text: result.message || 'ossutil is not available' });
+      }
     } catch (err: any) {
       onNotify?.({ type: 'error', message: 'Failed to load settings' });
+      setDriverStatus({ type: 'error', text: err?.message || 'Failed to load driver status' });
     }
   };
 
@@ -65,11 +82,16 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
   const handleSave = async () => {
     setLoading(true);
     try {
-      await SaveSettings(settings);
+      const payload: main.AppSettings = {
+        ...settings,
+        workDir: (settings.workDir || '').trim() || '~/.walioss',
+      };
+      await SaveSettings(payload);
       if (onThemeChange) {
-        onThemeChange(settings.theme);
+        onThemeChange(payload.theme);
       }
-      onSettingsSaved?.(settings);
+      setSettings(payload);
+      onSettingsSaved?.(payload);
       onNotify?.({ type: 'success', message: 'Settings saved' });
       onBack();
     } catch (err: any) {
@@ -80,7 +102,7 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
   };
 
   const handleTestOssutil = async () => {
-    setLoading(true);
+    setTestingDriver(true);
     let originalPath: string | null = null;
     try {
       originalPath = await GetOssutilPath();
@@ -88,11 +110,19 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
 
       const result = await CheckOssutilInstalled();
       if (result.success) {
-        onNotify?.({ type: 'success', message: `ossutil found: ${result.message}` });
+        const versionLine =
+          (result.message || '')
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .find((line) => !!line) || result.message || 'Detected';
+        setDriverStatus({ type: 'success', text: `ossutil version: ${versionLine}` });
+        onNotify?.({ type: 'success', message: `ossutil found: ${versionLine}` });
       } else {
+        setDriverStatus({ type: 'error', text: result.message || 'ossutil is not available' });
         onNotify?.({ type: 'error', message: result.message });
       }
     } catch (err: any) {
+      setDriverStatus({ type: 'error', text: err.message || 'Driver test failed' });
       onNotify?.({ type: 'error', message: err.message || 'Test failed' });
     } finally {
       if (originalPath !== null) {
@@ -100,7 +130,7 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
           await SetOssutilPath(originalPath);
         } catch {}
       }
-      setLoading(false);
+      setTestingDriver(false);
     }
   };
 
@@ -124,9 +154,9 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
           </div>
 
           <div className="settings-content">
-            {/* Ossutil Configuration */}
+            {/* Driver Configuration */}
             <div className="settings-section">
-              <h2 className="section-title">Ossutil Configuration</h2>
+              <h2 className="section-title">Driver Configuration</h2>
               <div className="form-group">
                 <label className="form-label">Ossutil Path</label>
                 <div className="form-inline">
@@ -137,11 +167,31 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
                     onChange={(e) => setSettings({ ...settings, ossutilPath: e.target.value })}
                     placeholder="Leave empty to use auto-detected ossutil"
                   />
-                  <button className="back-btn form-inline-btn" type="button" onClick={handleTestOssutil} disabled={loading}>
+                  <button className="back-btn form-inline-btn" type="button" onClick={handleTestOssutil} disabled={testingDriver || loading}>
                     Test
                   </button>
                 </div>
+                <div className="settings-hint">Leave empty to auto-detect ossutil from system PATH or bundled binary.</div>
               </div>
+              <div className="form-group">
+                <label className="form-label">Walioss Work Directory</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={settings.workDir || ''}
+                  onChange={(e) => setSettings({ ...settings, workDir: e.target.value })}
+                  placeholder="~/.walioss"
+                />
+                <div className="settings-hint">Stores app configuration and profiles in JSON format.</div>
+              </div>
+              {driverStatus && (
+                <div className={`settings-inline-message ${driverStatus.type}`}>
+                  {driverStatus.text}
+                </div>
+              )}
+              {testingDriver && (
+                <div className="settings-hint">Testing driver...</div>
+              )}
             </div>
 
             {/* Transfers */}

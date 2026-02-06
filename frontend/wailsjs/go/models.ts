@@ -18,6 +18,7 @@ export namespace main {
 	}
 	export class AppSettings {
 	    ossutilPath: string;
+	    workDir: string;
 	    defaultRegion: string;
 	    defaultEndpoint: string;
 	    theme: string;
@@ -31,6 +32,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ossutilPath = source["ossutilPath"];
+	        this.workDir = source["workDir"];
 	        this.defaultRegion = source["defaultRegion"];
 	        this.defaultEndpoint = source["defaultEndpoint"];
 	        this.theme = source["theme"];

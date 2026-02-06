@@ -1,6 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import './Login.css';
-import { TestConnection, LoadProfiles, SaveProfile, GetDefaultProfile, CheckOssutilInstalled } from '../../wailsjs/go/main/OSSService';
+import {
+  CheckOssutilInstalled,
+  GetDefaultProfile,
+  GetOssutilPath,
+  GetSettings,
+  LoadProfiles,
+  SaveProfile,
+  SaveSettings,
+  SetOssutilPath,
+  TestConnection,
+} from '../../wailsjs/go/main/OSSService';
 import { main } from '../../wailsjs/go/models';
 import ProfilePicker from '../components/ProfilePicker';
 
@@ -8,49 +18,91 @@ interface LoginProps {
   onLoginSuccess: (config: main.OSSConfig, profileName?: string | null) => void;
 }
 
+type InlineMessage = { type: 'success' | 'error' | 'info'; text: string };
+
 function Login({ onLoginSuccess }: LoginProps) {
   const [accessKeyId, setAccessKeyId] = useState('');
   const [accessKeySecret, setAccessKeySecret] = useState('');
   const [region, setRegion] = useState('cn-hangzhou');
   const [endpoint, setEndpoint] = useState('');
   const [defaultPath, setDefaultPath] = useState('');
-  
+
   const [profiles, setProfiles] = useState<main.OSSProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState('');
-  
+
   const [saveAsProfile, setSaveAsProfile] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [setAsDefault, setSetAsDefault] = useState(false);
-  
+
+  const [driverOssutilPath, setDriverOssutilPath] = useState('');
+  const [driverWorkDir, setDriverWorkDir] = useState('~/.walioss');
+  const [driverStatus, setDriverStatus] = useState<InlineMessage | null>(null);
+  const [driverTesting, setDriverTesting] = useState(false);
+  const [driverSaving, setDriverSaving] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [message, setMessage] = useState<InlineMessage | null>(null);
 
   useEffect(() => {
-    initializeApp();
+    void initializeApp();
   }, []);
 
-  const initializeApp = async () => {
-    // Check if ossutil is installed
-    const result = await CheckOssutilInstalled();
+  const renderDriverStatus = (result: main.ConnectionResult): InlineMessage => {
     if (!result.success) {
-      setMessage({ type: 'error', text: `ossutil not found: ${result.message}. Please install ossutil v2 first.` });
-    } else {
-      setMessage({ type: 'info', text: `ossutil detected: ${result.message}` });
-      setTimeout(() => setMessage(null), 3000);
+      return {
+        type: 'error',
+        text: result.message || 'ossutil is not available',
+      };
+    }
+    const versionLine =
+      (result.message || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => !!line) || result.message || 'Detected';
+    return {
+      type: 'success',
+      text: `ossutil version: ${versionLine}`,
+    };
+  };
+
+  const loadProfilesAndDefault = async () => {
+    const savedProfiles = await LoadProfiles();
+    setProfiles(savedProfiles || []);
+
+    const defaultProfile = await GetDefaultProfile();
+    if (defaultProfile) {
+      loadProfile(defaultProfile);
+      setSelectedProfile(defaultProfile.name);
+      return;
     }
 
-    // Load saved profiles
-    try {
-      const savedProfiles = await LoadProfiles();
-      setProfiles(savedProfiles || []);
+    if (selectedProfile && !(savedProfiles || []).some((p) => p.name === selectedProfile)) {
+      setSelectedProfile('');
+    }
+  };
 
-      // Load default profile if exists
-      const defaultProfile = await GetDefaultProfile();
-      if (defaultProfile) {
-        loadProfile(defaultProfile);
-        setSelectedProfile(defaultProfile.name);
+  const initializeApp = async () => {
+    try {
+      const settings = await GetSettings();
+      setDriverOssutilPath(settings?.ossutilPath || '');
+      setDriverWorkDir(settings?.workDir || '~/.walioss');
+
+      if (settings?.defaultRegion) {
+        setRegion(settings.defaultRegion);
       }
+      if (settings?.defaultEndpoint) {
+        setEndpoint(settings.defaultEndpoint);
+      }
+
+      const result = await CheckOssutilInstalled();
+      setDriverStatus(renderDriverStatus(result));
+    } catch (error: any) {
+      setDriverStatus({ type: 'error', text: error?.message || 'Failed to load driver configuration' });
+    }
+
+    try {
+      await loadProfilesAndDefault();
     } catch (error) {
       console.error('Failed to load profiles:', error);
     }
@@ -64,18 +116,66 @@ function Login({ onLoginSuccess }: LoginProps) {
     setDefaultPath(profile.config.defaultPath || '');
   };
 
-  const handleProfileChange = (profileName: string) => {
-    setSelectedProfile(profileName);
-    const profile = profiles.find(p => p.name === profileName);
+  const handleProfileChange = (nextProfileName: string) => {
+    setSelectedProfile(nextProfileName);
+    const profile = profiles.find((p) => p.name === nextProfileName);
     if (profile) {
       loadProfile(profile);
-    } else {
-      // Clear form for new profile
-      setAccessKeyId('');
-      setAccessKeySecret('');
-      setRegion('cn-hangzhou');
-      setEndpoint('');
-      setDefaultPath('');
+      return;
+    }
+
+    setAccessKeyId('');
+    setAccessKeySecret('');
+    setRegion('cn-hangzhou');
+    setEndpoint('');
+    setDefaultPath('');
+  };
+
+  const handleTestDriver = async () => {
+    setDriverTesting(true);
+    try {
+      const original = await GetOssutilPath();
+      try {
+        await SetOssutilPath(driverOssutilPath);
+        const result = await CheckOssutilInstalled();
+        setDriverStatus(renderDriverStatus(result));
+      } finally {
+        await SetOssutilPath(original);
+      }
+    } catch (error: any) {
+      setDriverStatus({ type: 'error', text: error?.message || 'Driver test failed' });
+    } finally {
+      setDriverTesting(false);
+    }
+  };
+
+  const handleApplyDriverConfig = async () => {
+    setDriverSaving(true);
+    try {
+      const current = await GetSettings();
+      const resolvedWorkDir = driverWorkDir.trim() || '~/.walioss';
+      const nextSettings: main.AppSettings = {
+        ...current,
+        ossutilPath: driverOssutilPath,
+        workDir: resolvedWorkDir,
+      };
+      await SaveSettings(nextSettings);
+
+      const saved = await GetSettings();
+      setDriverOssutilPath(saved?.ossutilPath || '');
+      setDriverWorkDir(saved?.workDir || '~/.walioss');
+
+      const result = await CheckOssutilInstalled();
+      setDriverStatus(renderDriverStatus(result));
+
+      await loadProfilesAndDefault();
+      setMessage({ type: 'success', text: 'Driver configuration updated' });
+    } catch (error: any) {
+      const text = error?.message || 'Failed to save driver configuration';
+      setDriverStatus({ type: 'error', text });
+      setMessage({ type: 'error', text });
+    } finally {
+      setDriverSaving(false);
     }
   };
 
@@ -128,7 +228,6 @@ function Login({ onLoginSuccess }: LoginProps) {
         defaultPath,
       };
 
-      // Test connection first
       const result = await TestConnection(config);
       if (!result.success) {
         setMessage({ type: 'error', text: result.message });
@@ -136,7 +235,6 @@ function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
 
-      // Save profile if requested
       if (saveAsProfile && profileName) {
         const profile = new main.OSSProfile({
           name: profileName,
@@ -144,13 +242,10 @@ function Login({ onLoginSuccess }: LoginProps) {
           isDefault: setAsDefault,
         });
         await SaveProfile(profile);
-        
-        // Refresh profiles
         const savedProfiles = await LoadProfiles();
         setProfiles(savedProfiles || []);
       }
 
-      // On success, notify parent
       const resolvedProfileName = selectedProfile || (saveAsProfile ? profileName.trim() : '') || null;
       onLoginSuccess(config, resolvedProfileName);
     } catch (error: any) {
@@ -179,6 +274,69 @@ function Login({ onLoginSuccess }: LoginProps) {
             ) : (
               <div className="form-hint">No saved profiles yet.</div>
             )}
+          </div>
+
+          <div className="login-side-section">
+            <div className="login-side-section-title">Driver Configuration</div>
+            <div className="driver-form">
+              <div className="form-group">
+                <label className="form-label">ossutil Path</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={driverOssutilPath}
+                  onChange={(e) => setDriverOssutilPath(e.target.value)}
+                  placeholder="Leave empty to auto-detect in system PATH"
+                />
+                <div className="form-hint">Leave empty to auto-detect ossutil from system PATH or bundled binary.</div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Walioss Work Directory</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={driverWorkDir}
+                  onChange={(e) => setDriverWorkDir(e.target.value)}
+                  placeholder="~/.walioss"
+                />
+                <div className="form-hint">Stores app config and profiles in JSON format.</div>
+              </div>
+
+              {driverStatus && (
+                <div className={`message ${driverStatus.type} driver-message`}>
+                  <span className="message-icon">
+                    {driverStatus.type === 'success' && '✓'}
+                    {driverStatus.type === 'error' && '✕'}
+                    {driverStatus.type === 'info' && 'ℹ'}
+                  </span>
+                  <span>{driverStatus.text}</span>
+                </div>
+              )}
+
+              <div className="driver-actions">
+                <button className="btn btn-secondary" type="button" onClick={handleTestDriver} disabled={driverTesting || driverSaving}>
+                  {driverTesting ? (
+                    <>
+                      <span className="spinner"></span>
+                      Testing...
+                    </>
+                  ) : (
+                    'Test Driver'
+                  )}
+                </button>
+                <button className="btn btn-secondary" type="button" onClick={handleApplyDriverConfig} disabled={driverSaving || driverTesting}>
+                  {driverSaving ? (
+                    <>
+                      <span className="spinner"></span>
+                      Applying...
+                    </>
+                  ) : (
+                    'Apply'
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -216,13 +374,7 @@ function Login({ onLoginSuccess }: LoginProps) {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Region *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. cn-hangzhou"
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value)}
-                />
+                <input type="text" className="form-input" placeholder="e.g. cn-hangzhou" value={region} onChange={(e) => setRegion(e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Endpoint</label>
@@ -235,8 +387,8 @@ function Login({ onLoginSuccess }: LoginProps) {
                 />
                 {endpoint.toLowerCase().includes('oss-accesspoint') && (
                   <div className="form-hint" style={{ marginTop: '6px', opacity: 0.85, fontSize: '12px' }}>
-                    Tip: Access Point endpoints (…oss-accesspoint…) are bucket-scoped and cannot list buckets.
-                    Leave Endpoint empty or use a service endpoint like <code>oss-cn-hangzhou.aliyuncs.com</code>.
+                    Tip: Access Point endpoints (…oss-accesspoint…) are bucket-scoped and cannot list buckets. Leave Endpoint empty or use a
+                    service endpoint like <code>oss-cn-hangzhou.aliyuncs.com</code>.
                   </div>
                 )}
               </div>
@@ -252,8 +404,8 @@ function Login({ onLoginSuccess }: LoginProps) {
                 onChange={(e) => setDefaultPath(e.target.value)}
               />
               <div className="form-hint" style={{ marginTop: '6px', opacity: 0.7, fontSize: '12px' }}>
-                For accounts without list-all-buckets permission, enter a path like <code>oss://bucket/folder/</code> to
-                open directly after login.
+                For accounts without list-all-buckets permission, enter a path like <code>oss://bucket/folder/</code> to open directly after
+                login.
               </div>
             </div>
 
@@ -265,13 +417,7 @@ function Login({ onLoginSuccess }: LoginProps) {
                 </label>
                 {saveAsProfile && (
                   <>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Profile name"
-                      value={profileName}
-                      onChange={(e) => setProfileName(e.target.value)}
-                    />
+                    <input type="text" className="form-input" placeholder="Profile name" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
                     <label>
                       <input type="checkbox" checked={setAsDefault} onChange={(e) => setSetAsDefault(e.target.checked)} />
                       Default
@@ -282,11 +428,7 @@ function Login({ onLoginSuccess }: LoginProps) {
             </div>
 
             <div className="button-group">
-              <button
-                className="btn btn-secondary"
-                onClick={handleTestConnection}
-                disabled={testingConnection || loading}
-              >
+              <button className="btn btn-secondary" onClick={handleTestConnection} disabled={testingConnection || loading}>
                 {testingConnection ? (
                   <>
                     <span className="spinner"></span>
@@ -296,11 +438,7 @@ function Login({ onLoginSuccess }: LoginProps) {
                   'Test Connection'
                 )}
               </button>
-              <button
-                className="btn btn-primary"
-                onClick={handleConnect}
-                disabled={loading || testingConnection}
-              >
+              <button className="btn btn-primary" onClick={handleConnect} disabled={loading || testingConnection}>
                 {loading ? (
                   <>
                     <span className="spinner"></span>
@@ -311,6 +449,7 @@ function Login({ onLoginSuccess }: LoginProps) {
                 )}
               </button>
             </div>
+
             {message && (
               <div className={`message ${message.type}`}>
                 <span className="message-icon">

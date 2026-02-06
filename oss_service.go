@@ -65,6 +65,7 @@ func suggestServiceEndpoint(region string) string {
 type OSSService struct {
 	ossutilPath        string
 	defaultOssutilPath string
+	defaultConfigDir   string
 	configDir          string
 	transferSeq        uint64
 	transferCtxMu      sync.RWMutex
@@ -73,9 +74,154 @@ type OSSService struct {
 	transferLimiter    *transferLimiter
 }
 
+const (
+	appStateSchemaVersion = 2
+	appStateFileName      = "config.json"
+	legacySettingsName    = "settings.json"
+	legacyProfilesName    = "profiles.json"
+	workDirRefFileName    = "workdir.json"
+)
+
+type appState struct {
+	SchemaVersion int          `json:"schemaVersion"`
+	Settings      AppSettings  `json:"settings"`
+	Profiles      []OSSProfile `json:"profiles"`
+}
+
+type workDirRef struct {
+	WorkDir string `json:"workDir"`
+}
+
+func normalizeWorkDirPath(pathValue string, fallback string) string {
+	fallback = filepath.Clean(strings.TrimSpace(fallback))
+	if fallback == "" {
+		fallback = ".walioss"
+	}
+
+	p := strings.TrimSpace(pathValue)
+	if p == "" {
+		p = fallback
+	}
+
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+			if p == "~" {
+				p = home
+			} else {
+				p = filepath.Join(home, strings.TrimPrefix(p, "~/"))
+			}
+		}
+	}
+
+	if !filepath.IsAbs(p) {
+		if abs, err := filepath.Abs(p); err == nil {
+			p = abs
+		}
+	}
+
+	p = filepath.Clean(p)
+	if strings.TrimSpace(p) == "" {
+		return fallback
+	}
+	return p
+}
+
+func compactHomePath(pathValue string) string {
+	p := strings.TrimSpace(pathValue)
+	if p == "" {
+		return p
+	}
+	p = filepath.Clean(p)
+
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return p
+	}
+	home = filepath.Clean(home)
+
+	rel, err := filepath.Rel(home, p)
+	if err != nil {
+		return p
+	}
+	rel = filepath.ToSlash(rel)
+
+	if rel == "." {
+		return "~"
+	}
+	if rel == ".." || strings.HasPrefix(rel, "../") {
+		return p
+	}
+	return "~/" + rel
+}
+
+func defaultAppSettings(workDir string) AppSettings {
+	workDir = normalizeWorkDirPath(workDir, workDir)
+	return AppSettings{
+		OssutilPath:        "",
+		WorkDir:            compactHomePath(workDir),
+		DefaultRegion:      "",
+		DefaultEndpoint:    "",
+		Theme:              "dark",
+		MaxTransferThreads: 3,
+		NewTabNameRule:     "folder",
+	}
+}
+
+func normalizeAppSettings(settings AppSettings, fallbackWorkDir string) AppSettings {
+	out := settings
+	out.OssutilPath = strings.TrimSpace(out.OssutilPath)
+	out.DefaultRegion = strings.TrimSpace(out.DefaultRegion)
+	out.DefaultEndpoint = strings.TrimSpace(out.DefaultEndpoint)
+	out.WorkDir = normalizeWorkDirPath(out.WorkDir, fallbackWorkDir)
+
+	out.Theme = strings.TrimSpace(out.Theme)
+	switch out.Theme {
+	case "dark", "light":
+	default:
+		out.Theme = "dark"
+	}
+
+	if out.MaxTransferThreads <= 0 {
+		out.MaxTransferThreads = 3
+	}
+	if out.MaxTransferThreads > 64 {
+		out.MaxTransferThreads = 64
+	}
+
+	out.NewTabNameRule = strings.TrimSpace(out.NewTabNameRule)
+	switch out.NewTabNameRule {
+	case "folder", "newTab":
+	default:
+		out.NewTabNameRule = "folder"
+	}
+
+	return out
+}
+
+func readWorkDirRefFromDefault(defaultDir string) string {
+	defaultDir = normalizeWorkDirPath(defaultDir, defaultDir)
+	refPath := filepath.Join(defaultDir, workDirRefFileName)
+
+	data, err := os.ReadFile(refPath)
+	if err != nil {
+		return ""
+	}
+
+	var ref workDirRef
+	if err := json.Unmarshal(data, &ref); err != nil {
+		return ""
+	}
+	return normalizeWorkDirPath(ref.WorkDir, defaultDir)
+}
+
 // NewOSSService creates a new OSSService instance
 func NewOSSService() *OSSService {
 	homeDir, _ := os.UserHomeDir()
+	defaultConfigDir := normalizeWorkDirPath(filepath.Join(homeDir, ".walioss"), filepath.Join(homeDir, ".walioss"))
+	configDir := defaultConfigDir
+	if refDir := readWorkDirRefFromDefault(defaultConfigDir); refDir != "" {
+		configDir = refDir
+	}
 
 	// Try to find ossutil in bin/ directory relative to executable
 	ossutilPath := "ossutil" // Default to PATH lookup
@@ -110,7 +256,8 @@ func NewOSSService() *OSSService {
 	return &OSSService{
 		ossutilPath:        ossutilPath,
 		defaultOssutilPath: ossutilPath,
-		configDir:          filepath.Join(homeDir, ".walioss"),
+		defaultConfigDir:   defaultConfigDir,
+		configDir:          configDir,
 		transferLimiter:    newTransferLimiter(3),
 	}
 }
@@ -199,6 +346,146 @@ func (s *OSSService) GetOssutilPath() string {
 	return s.ossutilPath
 }
 
+func (s *OSSService) stateFilePathIn(dir string) string {
+	return filepath.Join(dir, appStateFileName)
+}
+
+func (s *OSSService) legacySettingsPathIn(dir string) string {
+	return filepath.Join(dir, legacySettingsName)
+}
+
+func (s *OSSService) legacyProfilesPathIn(dir string) string {
+	return filepath.Join(dir, legacyProfilesName)
+}
+
+func (s *OSSService) workDirRefPath() string {
+	return filepath.Join(s.defaultConfigDir, workDirRefFileName)
+}
+
+func (s *OSSService) applySettingsRuntime(settings AppSettings) {
+	if strings.TrimSpace(settings.OssutilPath) == "" {
+		s.ossutilPath = s.defaultOssutilPath
+	} else {
+		s.ossutilPath = settings.OssutilPath
+	}
+	s.setMaxTransferThreads(settings.MaxTransferThreads)
+}
+
+func (s *OSSService) writeWorkDirRef(workDir string) error {
+	workDir = normalizeWorkDirPath(workDir, s.defaultConfigDir)
+	if err := os.MkdirAll(s.defaultConfigDir, 0700); err != nil {
+		return err
+	}
+
+	refPath := s.workDirRefPath()
+	if workDir == s.defaultConfigDir {
+		if err := os.Remove(refPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	ref := workDirRef{WorkDir: compactHomePath(workDir)}
+	data, err := json.MarshalIndent(ref, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(refPath, data, 0600)
+}
+
+func (s *OSSService) saveAppStateToDir(dir string, state appState) error {
+	dir = normalizeWorkDirPath(dir, s.defaultConfigDir)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	state.SchemaVersion = appStateSchemaVersion
+	state.Settings = normalizeAppSettings(state.Settings, dir)
+	state.Settings.WorkDir = compactHomePath(dir)
+	if state.Profiles == nil {
+		state.Profiles = []OSSProfile{}
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.stateFilePathIn(dir), data, 0600)
+}
+
+func (s *OSSService) loadAppStateFromDir(dir string) (appState, error) {
+	dir = normalizeWorkDirPath(dir, s.defaultConfigDir)
+	state := appState{
+		SchemaVersion: appStateSchemaVersion,
+		Settings:      defaultAppSettings(dir),
+		Profiles:      []OSSProfile{},
+	}
+
+	if data, err := os.ReadFile(s.stateFilePathIn(dir)); err == nil {
+		if err := json.Unmarshal(data, &state); err != nil {
+			return appState{}, err
+		}
+		state.Settings = normalizeAppSettings(state.Settings, dir)
+		if state.Profiles == nil {
+			state.Profiles = []OSSProfile{}
+		}
+		return state, nil
+	} else if !os.IsNotExist(err) {
+		return appState{}, err
+	}
+
+	migrated := false
+	if data, err := os.ReadFile(s.legacySettingsPathIn(dir)); err == nil {
+		if err := json.Unmarshal(data, &state.Settings); err != nil {
+			return appState{}, err
+		}
+		migrated = true
+	} else if !os.IsNotExist(err) {
+		return appState{}, err
+	}
+
+	if data, err := os.ReadFile(s.legacyProfilesPathIn(dir)); err == nil {
+		if err := json.Unmarshal(data, &state.Profiles); err != nil {
+			return appState{}, err
+		}
+		migrated = true
+	} else if !os.IsNotExist(err) {
+		return appState{}, err
+	}
+
+	state.Settings = normalizeAppSettings(state.Settings, dir)
+	if state.Profiles == nil {
+		state.Profiles = []OSSProfile{}
+	}
+
+	if migrated {
+		if err := s.saveAppStateToDir(dir, state); err != nil {
+			return appState{}, err
+		}
+	}
+	return state, nil
+}
+
+func (s *OSSService) loadAppState() (appState, error) {
+	dir := normalizeWorkDirPath(s.configDir, s.defaultConfigDir)
+	state, err := s.loadAppStateFromDir(dir)
+	if err != nil {
+		return appState{}, err
+	}
+
+	configuredDir := normalizeWorkDirPath(state.Settings.WorkDir, dir)
+	if configuredDir != dir {
+		state, err = s.loadAppStateFromDir(configuredDir)
+		if err != nil {
+			return appState{}, err
+		}
+		dir = configuredDir
+	}
+
+	s.configDir = dir
+	return state, nil
+}
+
 func parseDefaultPathLocation(path string) (string, string, bool) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
@@ -278,12 +565,11 @@ func (s *OSSService) TestConnection(config OSSConfig) ConnectionResult {
 
 // SaveProfile saves an OSS profile to config directory
 func (s *OSSService) SaveProfile(profile OSSProfile) error {
-	// Ensure config directory exists
-	if err := os.MkdirAll(s.configDir, 0700); err != nil {
+	state, err := s.loadAppState()
+	if err != nil {
 		return err
 	}
-
-	profiles, _ := s.LoadProfiles()
+	profiles := state.Profiles
 
 	// Update or add profile
 	found := false
@@ -307,36 +593,30 @@ func (s *OSSService) SaveProfile(profile OSSProfile) error {
 		}
 	}
 
-	return s.saveProfiles(profiles)
+	state.Profiles = profiles
+	return s.saveAppStateToDir(s.configDir, state)
 }
 
 // LoadProfiles loads all saved profiles
 func (s *OSSService) LoadProfiles() ([]OSSProfile, error) {
-	configPath := filepath.Join(s.configDir, "profiles.json")
-	data, err := os.ReadFile(configPath)
+	state, err := s.loadAppState()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []OSSProfile{}, nil
-		}
 		return nil, err
 	}
-
-	var profiles []OSSProfile
-	if err := json.Unmarshal(data, &profiles); err != nil {
-		return nil, err
+	if state.Profiles == nil {
+		return []OSSProfile{}, nil
 	}
-
-	return profiles, nil
+	return state.Profiles, nil
 }
 
 // GetProfile loads a specific profile by name
 func (s *OSSService) GetProfile(name string) (*OSSProfile, error) {
-	profiles, err := s.LoadProfiles()
+	state, err := s.loadAppState()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, p := range profiles {
+	for _, p := range state.Profiles {
 		if p.Name == name {
 			return &p, nil
 		}
@@ -347,11 +627,12 @@ func (s *OSSService) GetProfile(name string) (*OSSProfile, error) {
 
 // DeleteProfile deletes a profile by name
 func (s *OSSService) DeleteProfile(name string) error {
-	profiles, err := s.LoadProfiles()
+	state, err := s.loadAppState()
 	if err != nil {
 		return err
 	}
 
+	profiles := state.Profiles
 	newProfiles := make([]OSSProfile, 0)
 	for _, p := range profiles {
 		if p.Name != name {
@@ -359,17 +640,18 @@ func (s *OSSService) DeleteProfile(name string) error {
 		}
 	}
 
-	return s.saveProfiles(newProfiles)
+	state.Profiles = newProfiles
+	return s.saveAppStateToDir(s.configDir, state)
 }
 
 // GetDefaultProfile returns the default profile if set
 func (s *OSSService) GetDefaultProfile() (*OSSProfile, error) {
-	profiles, err := s.LoadProfiles()
+	state, err := s.loadAppState()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, p := range profiles {
+	for _, p := range state.Profiles {
 		if p.IsDefault {
 			return &p, nil
 		}
@@ -879,100 +1161,50 @@ func (s *OSSService) CheckOssutilInstalled() ConnectionResult {
 
 // saveProfiles saves profiles to config file
 func (s *OSSService) saveProfiles(profiles []OSSProfile) error {
-	configPath := filepath.Join(s.configDir, "profiles.json")
-	data, err := json.MarshalIndent(profiles, "", "  ")
+	state, err := s.loadAppState()
 	if err != nil {
 		return err
 	}
-
-	return os.WriteFile(configPath, data, 0600)
+	state.Profiles = profiles
+	return s.saveAppStateToDir(s.configDir, state)
 }
 
 // GetSettings loads application settings
 func (s *OSSService) GetSettings() (AppSettings, error) {
-	settingsPath := filepath.Join(s.configDir, "settings.json")
-	data, err := os.ReadFile(settingsPath)
+	state, err := s.loadAppState()
 	if err != nil {
-		if os.IsNotExist(err) {
-			// Return defaults
-			return AppSettings{
-				OssutilPath:        "",
-				Theme:              "dark",
-				MaxTransferThreads: 3,
-				NewTabNameRule:     "folder",
-			}, nil
-		}
 		return AppSettings{}, err
 	}
 
-	var settings AppSettings
-	if err := json.Unmarshal(data, &settings); err != nil {
-		return AppSettings{}, err
-	}
+	settings := normalizeAppSettings(state.Settings, s.configDir)
+	settings.WorkDir = compactHomePath(s.configDir)
+	state.Settings = settings
+	_ = s.saveAppStateToDir(s.configDir, state)
+	_ = s.writeWorkDirRef(s.configDir)
 
-	if settings.MaxTransferThreads <= 0 {
-		settings.MaxTransferThreads = 3
-	}
-
-	settings.NewTabNameRule = strings.TrimSpace(settings.NewTabNameRule)
-	if settings.NewTabNameRule == "" {
-		settings.NewTabNameRule = "folder"
-	}
-	switch settings.NewTabNameRule {
-	case "folder", "newTab":
-	default:
-		settings.NewTabNameRule = "folder"
-	}
-
-	// Apply ossutil path if set; empty means "auto".
-	if strings.TrimSpace(settings.OssutilPath) == "" {
-		s.ossutilPath = s.defaultOssutilPath
-	} else {
-		s.ossutilPath = settings.OssutilPath
-	}
-
-	s.setMaxTransferThreads(settings.MaxTransferThreads)
-
+	s.applySettingsRuntime(settings)
 	return settings, nil
 }
 
 // SaveSettings persists application settings
 func (s *OSSService) SaveSettings(settings AppSettings) error {
-	if err := os.MkdirAll(s.configDir, 0700); err != nil {
-		return err
-	}
-
-	if settings.MaxTransferThreads <= 0 {
-		settings.MaxTransferThreads = 3
-	}
-	if settings.MaxTransferThreads > 64 {
-		settings.MaxTransferThreads = 64
-	}
-
-	settings.NewTabNameRule = strings.TrimSpace(settings.NewTabNameRule)
-	if settings.NewTabNameRule == "" {
-		settings.NewTabNameRule = "folder"
-	}
-	switch settings.NewTabNameRule {
-	case "folder", "newTab":
-	default:
-		settings.NewTabNameRule = "folder"
-	}
-
-	// Apply ossutil path immediately; empty means "auto".
-	if strings.TrimSpace(settings.OssutilPath) == "" {
-		s.ossutilPath = s.defaultOssutilPath
-	} else {
-		s.ossutilPath = settings.OssutilPath
-	}
-
-	s.setMaxTransferThreads(settings.MaxTransferThreads)
-
-	settingsPath := filepath.Join(s.configDir, "settings.json")
-	data, err := json.MarshalIndent(settings, "", "  ")
+	state, err := s.loadAppState()
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(settingsPath, data, 0600)
+	nextSettings := normalizeAppSettings(settings, s.defaultConfigDir)
+	targetDir := nextSettings.WorkDir
+	state.Settings = nextSettings
+
+	if err := s.saveAppStateToDir(targetDir, state); err != nil {
+		return err
+	}
+	s.configDir = targetDir
+	if err := s.writeWorkDirRef(targetDir); err != nil {
+		return err
+	}
+
+	s.applySettingsRuntime(nextSettings)
+	return nil
 }

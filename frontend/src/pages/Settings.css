@@ -142,6 +142,41 @@
     flex-shrink: 0;
 }
 
+.settings-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1.35;
+}
+
+.settings-inline-message {
+    margin-top: 10px;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    border: 1px solid transparent;
+    word-break: break-word;
+}
+
+.settings-inline-message.success {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.28);
+    color: #4ade80;
+}
+
+.settings-inline-message.error {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.24);
+    color: #f87171;
+}
+
+.settings-inline-message.info {
+    background: rgba(79, 172, 254, 0.12);
+    border-color: rgba(79, 172, 254, 0.24);
+    color: #7dd3fc;
+}
+
 .theme-toggle {
     display: flex;
     gap: 10px;
@@ -233,6 +268,28 @@ body.theme-light .settings-container .form-input:focus {
 
 body.theme-light .settings-container .form-input::placeholder {
     color: rgba(15, 23, 42, 0.35);
+}
+
+body.theme-light .settings-container .settings-hint {
+    color: rgba(15, 23, 42, 0.58);
+}
+
+body.theme-light .settings-container .settings-inline-message.success {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.28);
+    color: #047857;
+}
+
+body.theme-light .settings-container .settings-inline-message.error {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.22);
+    color: #b91c1c;
+}
+
+body.theme-light .settings-container .settings-inline-message.info {
+    background: rgba(2, 132, 199, 0.1);
+    border-color: rgba(2, 132, 199, 0.2);
+    color: #0369a1;
 }
 
 body.theme-light .settings-container .back-btn {
