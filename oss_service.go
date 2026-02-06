@@ -92,6 +92,25 @@ type workDirRef struct {
 	WorkDir string `json:"workDir"`
 }
 
+func expandLeadingTilde(pathValue string) string {
+	p := strings.TrimSpace(pathValue)
+	if p == "" {
+		return p
+	}
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return p
+	}
+	if p == "~" {
+		return filepath.Clean(home)
+	}
+	return filepath.Join(home, strings.TrimPrefix(p, "~/"))
+}
+
 func normalizeWorkDirPath(pathValue string, fallback string) string {
 	fallback = filepath.Clean(strings.TrimSpace(fallback))
 	if fallback == "" {
@@ -103,15 +122,7 @@ func normalizeWorkDirPath(pathValue string, fallback string) string {
 		p = fallback
 	}
 
-	if p == "~" || strings.HasPrefix(p, "~/") {
-		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			if p == "~" {
-				p = home
-			} else {
-				p = filepath.Join(home, strings.TrimPrefix(p, "~/"))
-			}
-		}
-	}
+	p = expandLeadingTilde(p)
 
 	if !filepath.IsAbs(p) {
 		if abs, err := filepath.Abs(p); err == nil {
@@ -124,6 +135,15 @@ func normalizeWorkDirPath(pathValue string, fallback string) string {
 		return fallback
 	}
 	return p
+}
+
+func normalizeOssutilPath(pathValue string) string {
+	p := strings.TrimSpace(pathValue)
+	if p == "" {
+		return ""
+	}
+	p = expandLeadingTilde(p)
+	return filepath.Clean(p)
 }
 
 func compactHomePath(pathValue string) string {
@@ -334,11 +354,12 @@ func (s *OSSService) runOssutil(args ...string) ([]byte, error) {
 
 // SetOssutilPath sets custom ossutil binary path
 func (s *OSSService) SetOssutilPath(path string) {
-	if strings.TrimSpace(path) == "" {
+	resolved := normalizeOssutilPath(path)
+	if resolved == "" {
 		s.ossutilPath = s.defaultOssutilPath
 		return
 	}
-	s.ossutilPath = path
+	s.ossutilPath = resolved
 }
 
 // GetOssutilPath returns current ossutil path
@@ -363,10 +384,11 @@ func (s *OSSService) workDirRefPath() string {
 }
 
 func (s *OSSService) applySettingsRuntime(settings AppSettings) {
-	if strings.TrimSpace(settings.OssutilPath) == "" {
+	resolved := normalizeOssutilPath(settings.OssutilPath)
+	if resolved == "" {
 		s.ossutilPath = s.defaultOssutilPath
 	} else {
-		s.ossutilPath = settings.OssutilPath
+		s.ossutilPath = resolved
 	}
 	s.setMaxTransferThreads(settings.MaxTransferThreads)
 }
