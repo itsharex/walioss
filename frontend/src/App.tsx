@@ -255,9 +255,6 @@ function App() {
     return () => off();
   }, [openAbout]);
 
-  // Titlebar drag region for macOS
-  const TitlebarDrag = () => <div className="titlebar-drag" />;
-
   const handleLoginSuccess = (config: main.OSSConfig, profileName?: string | null) => {
     const initialLoc = parseOssPathLocation(config?.defaultPath);
     setSessionConfig(config);
@@ -502,7 +499,6 @@ function App() {
 
   return (
     <>
-      <TitlebarDrag />
       <div className="dashboard-container">
 	        <header className="dashboard-header">
 	          <div className="dashboard-topbar">

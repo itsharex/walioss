@@ -111,17 +111,6 @@ code,
     }
 }
 
-/* macOS titlebar drag region */
-.titlebar-drag {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 28px;
-    -webkit-app-region: drag;
-    z-index: 9999;
-}
-
 /* Dashboard styles */
 .dashboard-container {
     height: 100%;
@@ -174,6 +163,18 @@ body.theme-light .dashboard-container::after {
     position: relative;
     z-index: 1;
     transition: background-color 220ms ease, border-color 220ms ease, color 220ms ease;
+    -webkit-app-region: drag;
+    --wails-draggable: drag;
+}
+
+.dashboard-header button,
+.dashboard-header input,
+.dashboard-header textarea,
+.dashboard-header select,
+.dashboard-header [role="button"],
+.dashboard-header .window-tabs {
+    -webkit-app-region: no-drag;
+    --wails-draggable: no-drag;
 }
 
 .dashboard-topbar {
