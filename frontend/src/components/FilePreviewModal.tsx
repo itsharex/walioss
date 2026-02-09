@@ -51,6 +51,43 @@ const textExtensions = new Set([
   'sql',
 ]);
 
+const codeExtensions = new Set([
+  'go',
+  'js',
+  'jsx',
+  'ts',
+  'tsx',
+  'css',
+  'scss',
+  'less',
+  'html',
+  'htm',
+  'java',
+  'py',
+  'rb',
+  'rs',
+  'c',
+  'cpp',
+  'h',
+  'hpp',
+  'sh',
+  'bash',
+  'zsh',
+  'sql',
+  'json',
+  'jsonl',
+  'jsonc',
+  'yaml',
+  'yml',
+  'xml',
+  'toml',
+  'ini',
+  'conf',
+  'env',
+  'md',
+  'markdown',
+]);
+
 const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg']);
 const videoExtensions = new Set(['mp4', 'webm', 'mov', 'mkv']);
 const pdfExtensions = new Set(['pdf']);
@@ -277,6 +314,12 @@ export default function FilePreviewModal({
     return object.size <= MAX_TEXT_EDIT_BYTES;
   }, [extension, object]);
 
+  const isCodeText = useMemo(() => {
+    if (!object) return false;
+    const nameLower = object.name.toLowerCase();
+    return nameLower === 'dockerfile' || nameLower === 'makefile' || codeExtensions.has(extension);
+  }, [extension, object]);
+
   const kindFromName = useMemo((): PreviewKind => {
     if (!object) return 'unsupported';
     const nameLower = object.name.toLowerCase();
@@ -421,10 +464,10 @@ export default function FilePreviewModal({
     try {
       await navigator.clipboard.writeText(object.path);
       setPathCopyState('copied');
-      onNotify?.({ type: 'success', message: '已复制到剪贴板' });
+      onNotify?.({ type: 'success', message: 'Path copied to clipboard' });
     } catch {
       setPathCopyState('failed');
-      onNotify?.({ type: 'error', message: '复制路径失败' });
+      onNotify?.({ type: 'error', message: 'Failed to copy path' });
     }
     if (pathCopyTimerRef.current) {
       window.clearTimeout(pathCopyTimerRef.current);
@@ -556,7 +599,7 @@ export default function FilePreviewModal({
                 Preview is truncated to {formatBytes(MAX_TEXT_PREVIEW_BYTES)}.
               </div>
             )}
-            <pre className="preview-code">
+            <pre className={`preview-code ${isCodeText ? 'high-contrast' : ''}`}>
               <code dangerouslySetInnerHTML={{ __html: highlightHtml || escapeHtml(text) }} />
             </pre>
           </div>
@@ -567,7 +610,7 @@ export default function FilePreviewModal({
         <div className="preview-text">
           {truncated && <div className="preview-banner">Preview is truncated to {formatBytes(MAX_TEXT_EDIT_BYTES)}.</div>}
           {text.length > MAX_HIGHLIGHT_CHARS && <div className="preview-hint">Syntax highlighting is simplified after {formatBytes(MAX_HIGHLIGHT_CHARS)} for performance.</div>}
-          <div className="highlight-editor">
+          <div className={`highlight-editor ${isCodeText ? 'high-contrast' : ''}`}>
             <pre ref={highlightLayerRef} className="highlight-layer" aria-hidden="true">
               <code dangerouslySetInnerHTML={{ __html: highlightHtml || escapeHtml(text) }} />
             </pre>
@@ -611,8 +654,8 @@ export default function FilePreviewModal({
                 type="button"
                 onClick={handleCopyPath}
                 data-copy-state={pathCopyState}
-                title={pathCopyState === 'copied' ? `已复制\n${object.path}` : `${object.path}\n点击复制完整路径`}
-                aria-label="点击复制完整路径"
+                title={pathCopyState === 'copied' ? `Copied\n${object.path}` : `${object.path}\nClick to copy full path`}
+                aria-label="Copy full path"
               >
                 {object.path}
               </button>
@@ -632,12 +675,6 @@ export default function FilePreviewModal({
                           : 'File'}
                 </span>
               </div>
-              {loadElapsedMs !== null && (
-                <div className="meta-chip">
-                  <span className="meta-label">Elapsed</span>
-                  <span className="meta-value">{formatElapsedMs(loadElapsedMs)}</span>
-                </div>
-              )}
               {object.size > 0 && (
                 <div className="meta-chip">
                   <span className="meta-label">Size</span>
@@ -676,6 +713,12 @@ export default function FilePreviewModal({
                 <div className="meta-chip">
                   <span className="meta-label">Modified</span>
                   <span className="meta-value">{object.lastModified}</span>
+                </div>
+              )}
+              {loadElapsedMs !== null && (
+                <div className="meta-chip">
+                  <span className="meta-label">Elapsed</span>
+                  <span className="meta-value">{formatElapsedMs(loadElapsedMs)}</span>
                 </div>
               )}
             </div>

@@ -302,6 +302,30 @@
     background: rgba(79, 172, 254, 0.25);
 }
 
+.highlight-editor.high-contrast,
+.preview-code.high-contrast {
+    background: #0b1220;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.highlight-editor.high-contrast:focus-within {
+    border-color: rgba(56, 189, 248, 0.6);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.22);
+}
+
+.highlight-editor.high-contrast .highlight-layer,
+.preview-code.high-contrast {
+    color: rgba(226, 232, 240, 0.96);
+}
+
+.highlight-editor.high-contrast .highlight-input {
+    caret-color: rgba(248, 250, 252, 0.98);
+}
+
+.highlight-editor.high-contrast .highlight-input::selection {
+    background: rgba(56, 189, 248, 0.35);
+}
+
 .preview-code {
     flex: 1;
     min-height: 0;
@@ -381,6 +405,26 @@
 
 .token-comment {
     color: rgba(255, 255, 255, 0.45);
+}
+
+.highlight-editor.high-contrast .token-string,
+.preview-code.high-contrast .token-string {
+    color: #fda4af;
+}
+
+.highlight-editor.high-contrast .token-number,
+.preview-code.high-contrast .token-number {
+    color: #7dd3fc;
+}
+
+.highlight-editor.high-contrast .token-keyword,
+.preview-code.high-contrast .token-keyword {
+    color: #c4b5fd;
+}
+
+.highlight-editor.high-contrast .token-comment,
+.preview-code.high-contrast .token-comment {
+    color: #94a3b8;
 }
 
 /* Theme (Light) */
@@ -486,4 +530,25 @@ body.theme-light .pane-hint {
 
 body.theme-light .token-comment {
     color: rgba(15, 23, 42, 0.45);
+}
+
+body.theme-light .highlight-editor.high-contrast,
+body.theme-light .preview-code.high-contrast {
+    background: #0b1220;
+    border-color: rgba(100, 116, 139, 0.5);
+    color: rgba(226, 232, 240, 0.96);
+}
+
+body.theme-light .highlight-editor.high-contrast .highlight-layer,
+body.theme-light .preview-code.high-contrast {
+    color: rgba(226, 232, 240, 0.96);
+}
+
+body.theme-light .highlight-editor.high-contrast .highlight-input {
+    caret-color: rgba(248, 250, 252, 0.98);
+}
+
+body.theme-light .highlight-editor.high-contrast .token-comment,
+body.theme-light .preview-code.high-contrast .token-comment {
+    color: #94a3b8;
 }
