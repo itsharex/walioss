@@ -288,6 +288,42 @@
     gap: 12px;
 }
 
+.transfer-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+    min-width: 136px;
+}
+
+.transfer-header-meta {
+    display: inline-grid;
+    grid-template-columns: repeat(2, minmax(0, auto));
+    gap: 8px;
+}
+
+.transfer-header-meta-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 0;
+}
+
+.transfer-header-meta-item .meta-label {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+.transfer-header-meta-item .meta-value {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
 .transfer-main {
     flex: 1;
     min-width: 0;
@@ -457,6 +493,10 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
+}
+
+.transfer-meta-row.completed {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .transfer-meta-item {
@@ -693,6 +733,14 @@ body.theme-light .transfer-badge {
     border: 1px solid rgba(15, 23, 42, 0.12);
     background: rgba(15, 23, 42, 0.03);
     color: rgba(15, 23, 42, 0.75);
+}
+
+body.theme-light .transfer-header-meta-item .meta-label {
+    color: rgba(15, 23, 42, 0.5);
+}
+
+body.theme-light .transfer-header-meta-item .meta-value {
+    color: rgba(15, 23, 42, 0.88);
 }
 
 body.theme-light .transfer-progress-bar {

@@ -67,6 +67,28 @@ function formatProgress(doneBytes?: number, totalBytes?: number) {
   return Math.max(0, Math.min(100, p));
 }
 
+function isTransferCompleted(status: TransferStatus) {
+  return status === 'success' || status === 'error';
+}
+
+function getTransferSizeBytes(t: TransferRecord) {
+  const total = t.totalBytes && t.totalBytes > 0 ? t.totalBytes : 0;
+  const done = t.doneBytes && t.doneBytes > 0 ? t.doneBytes : 0;
+  const size = Math.max(total, done);
+  return size > 0 ? size : undefined;
+}
+
+function getTransferAverageSpeed(t: TransferRecord) {
+  const startedAt = t.startedAtMs;
+  const finishedAt = t.finishedAtMs || t.updatedAtMs;
+  if (!startedAt || !finishedAt || finishedAt <= startedAt) return undefined;
+  const bytes = getTransferSizeBytes(t);
+  if (!bytes) return undefined;
+  const durationSeconds = (finishedAt - startedAt) / 1000;
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return undefined;
+  return bytes / durationSeconds;
+}
+
 function transferSortValue(t: TransferRecord) {
   return t.updatedAtMs || t.startedAtMs || t.finishedAtMs || 0;
 }
@@ -216,6 +238,25 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
     </span>
   );
 
+  const renderCompletedSummary = (t: TransferRecord) => {
+    if (!isTransferCompleted(t.status)) return null;
+    const avgSpeed = getTransferAverageSpeed(t) || t.speedBytesPerSec;
+    const sizeBytes = getTransferSizeBytes(t);
+
+    return (
+      <div className="transfer-header-meta" aria-label="Completed transfer summary">
+        <div className="transfer-header-meta-item">
+          <span className="meta-label">Size</span>
+          <span className="meta-value">{formatBytes(sizeBytes)}</span>
+        </div>
+        <div className="transfer-header-meta-item">
+          <span className="meta-label">Avg speed</span>
+          <span className="meta-value">{formatSpeed(avgSpeed)}</span>
+        </div>
+      </div>
+    );
+  };
+
   const renderTransferActions = (t: TransferRecord) =>
     t.type === 'download' &&
     t.status === 'success' &&
@@ -233,6 +274,8 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
   const renderTransferCard = (t: TransferRecord) => {
     const progress = formatProgress(t.doneBytes, t.totalBytes);
     const showProgress = t.status === 'in-progress' || t.status === 'queued';
+    const isCompleted = isTransferCompleted(t.status);
+    const speedForMeta = isCompleted ? getTransferAverageSpeed(t) || t.speedBytesPerSec : t.speedBytesPerSec;
     const ossPath = `oss://${t.bucket}/${t.key}`;
     const expanded = isItemExpanded(t.id);
 
@@ -271,6 +314,7 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
           </div>
           <div className="transfer-status">
             <span className={`transfer-badge ${t.status}`}>{t.status}</span>
+            {renderCompletedSummary(t)}
           </div>
         </div>
 
@@ -288,19 +332,21 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
               </div>
             )}
 
-            <div className="transfer-meta-row">
+            <div className={`transfer-meta-row ${isCompleted ? 'completed' : ''}`}>
               <div className="transfer-meta-item">
                 <div className="meta-label">Size</div>
-                <div className="meta-value">{formatBytes(t.totalBytes)}</div>
+                <div className="meta-value">{formatBytes(getTransferSizeBytes(t))}</div>
               </div>
               <div className="transfer-meta-item">
-                <div className="meta-label">Speed</div>
-                <div className="meta-value">{formatSpeed(t.speedBytesPerSec)}</div>
+                <div className="meta-label">{isCompleted ? 'Avg speed' : 'Speed'}</div>
+                <div className="meta-value">{formatSpeed(speedForMeta)}</div>
               </div>
-              <div className="transfer-meta-item">
-                <div className="meta-label">ETA</div>
-                <div className="meta-value">{formatEta(t.etaSeconds)}</div>
-              </div>
+              {!isCompleted && (
+                <div className="transfer-meta-item">
+                  <div className="meta-label">ETA</div>
+                  <div className="meta-value">{formatEta(t.etaSeconds)}</div>
+                </div>
+              )}
             </div>
 
             {t.message && <div className="transfer-message">{t.message}</div>}
@@ -445,6 +491,7 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
                       </div>
                       <div className="transfer-status">
                         <span className={`transfer-badge ${group.status}`}>{group.status}</span>
+                        {renderCompletedSummary(group)}
                       </div>
                     </div>
 
