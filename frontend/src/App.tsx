@@ -23,6 +23,7 @@ type AppTab = {
 
 type TransferStatus = 'queued' | 'in-progress' | 'success' | 'error';
 type TransferType = 'upload' | 'download';
+type TransferView = 'all' | TransferType;
 
 type TransferItem = {
   id: string;
@@ -66,6 +67,7 @@ type TransferSummary = {
 };
 
 const TAB_REORDER_DRAG_TYPE = 'application/x-walioss-tab-reorder';
+const TRANSFER_DERIVED_SPEED_STALE_MS = 6000;
 
 const canReadTabReorderPayload = (dt: DataTransfer | null | undefined) => {
   if (!dt) return false;
@@ -139,6 +141,11 @@ const formatSummaryProgress = (summary: TransferSummary) => {
   return `${summary.taskCount} task${summary.taskCount > 1 ? 's' : ''}`;
 };
 
+const finiteNumber = (value: unknown) => {
+  if (typeof value !== 'number') return undefined;
+  return Number.isFinite(value) ? value : undefined;
+};
+
 function App() {
   const [globalView, setGlobalView] = useState<GlobalView>('session');
   const [theme, setTheme] = useState<string>('dark');
@@ -160,7 +167,7 @@ function App() {
   const [renameValue, setRenameValue] = useState<string>('');
   const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [showTransfers, setShowTransfers] = useState<boolean>(false);
-  const [transferView, setTransferView] = useState<TransferType>('download');
+  const [transferView, setTransferView] = useState<TransferView>('all');
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const [aboutOpen, setAboutOpen] = useState<boolean>(false);
@@ -272,28 +279,90 @@ function App() {
   };
 
   const toTransferItem = useCallback((update: any, previous?: TransferItem): TransferItem => {
+    const status = (update.status || previous?.status || 'queued') as TransferStatus;
+    const totalBytesRaw = finiteNumber(update.totalBytes) ?? previous?.totalBytes;
+    const totalBytes = typeof totalBytesRaw === 'number' ? Math.max(0, totalBytesRaw) : undefined;
+    const doneBytesRaw = finiteNumber(update.doneBytes) ?? previous?.doneBytes;
+    let doneBytes = typeof doneBytesRaw === 'number' ? Math.max(0, doneBytesRaw) : undefined;
+    if (typeof totalBytes === 'number' && typeof doneBytes === 'number') {
+      doneBytes = Math.min(doneBytes, totalBytes);
+    }
+
+    const nowMs = Date.now();
+    const updatedAtMs = finiteNumber(update.updatedAtMs) ?? previous?.updatedAtMs ?? nowMs;
+    const previousUpdatedAt = previous?.updatedAtMs ?? updatedAtMs;
+    const deltaMs = updatedAtMs - previousUpdatedAt;
+    const previousDoneBytes = previous?.doneBytes ?? 0;
+    const currentDoneBytes = doneBytes ?? previousDoneBytes;
+    const deltaDone = currentDoneBytes - previousDoneBytes;
+
+    const incomingSpeed = finiteNumber(update.speedBytesPerSec);
+    let speedBytesPerSec = incomingSpeed ?? previous?.speedBytesPerSec ?? 0;
+    if (status === 'in-progress') {
+      if (!(incomingSpeed && incomingSpeed > 0)) {
+        if (deltaDone > 0 && deltaMs > 0) {
+          const derivedSpeed = deltaDone / (deltaMs / 1000);
+          if (Number.isFinite(derivedSpeed) && derivedSpeed > 0) {
+            const prevSpeed = (previous?.speedBytesPerSec || 0) > 0 ? (previous?.speedBytesPerSec as number) : 0;
+            speedBytesPerSec = prevSpeed > 0 ? prevSpeed * 0.65 + derivedSpeed * 0.35 : derivedSpeed;
+          }
+        } else {
+          const prevSpeed = previous?.speedBytesPerSec || 0;
+          speedBytesPerSec =
+            prevSpeed > 0 && updatedAtMs - previousUpdatedAt <= TRANSFER_DERIVED_SPEED_STALE_MS ? prevSpeed : 0;
+        }
+      }
+    } else if (!(incomingSpeed && incomingSpeed > 0)) {
+      speedBytesPerSec = previous?.speedBytesPerSec || 0;
+    }
+
+    const incomingEta = finiteNumber(update.etaSeconds);
+    let etaSeconds = incomingEta ?? previous?.etaSeconds ?? 0;
+    if (status === 'in-progress') {
+      if (!(incomingEta && incomingEta > 0)) {
+        if (
+          typeof totalBytes === 'number' &&
+          totalBytes > 0 &&
+          typeof currentDoneBytes === 'number' &&
+          currentDoneBytes >= 0 &&
+          currentDoneBytes < totalBytes &&
+          speedBytesPerSec > 0
+        ) {
+          etaSeconds = Math.max(0, Math.ceil((totalBytes - currentDoneBytes) / speedBytesPerSec));
+        } else if (currentDoneBytes >= (totalBytes || 0) && (totalBytes || 0) > 0) {
+          etaSeconds = 0;
+        }
+      }
+    } else if (!(incomingEta && incomingEta > 0)) {
+      etaSeconds = 0;
+    }
+
+    if (status === 'success' && typeof totalBytes === 'number' && totalBytes > 0) {
+      doneBytes = totalBytes;
+    }
+
     return {
       id: update.id,
       name: update.name || previous?.name || 'Transfer',
-      type: update.type,
-      bucket: update.bucket,
-      key: update.key,
-      parentId: update.parentId,
-      isGroup: !!update.isGroup,
-      fileCount: update.fileCount,
-      doneCount: update.doneCount,
-      successCount: update.successCount,
-      errorCount: update.errorCount,
-      status: update.status,
-      message: update.message,
-      localPath: update.localPath,
-      totalBytes: update.totalBytes,
-      doneBytes: update.doneBytes,
-      speedBytesPerSec: update.speedBytesPerSec,
-      etaSeconds: update.etaSeconds,
-      startedAtMs: update.startedAtMs,
-      updatedAtMs: update.updatedAtMs,
-      finishedAtMs: update.finishedAtMs,
+      type: update.type || previous?.type || 'download',
+      bucket: update.bucket || previous?.bucket || '',
+      key: update.key || previous?.key || '',
+      parentId: update.parentId ?? previous?.parentId,
+      isGroup: update.isGroup ?? previous?.isGroup ?? false,
+      fileCount: finiteNumber(update.fileCount) ?? previous?.fileCount,
+      doneCount: finiteNumber(update.doneCount) ?? previous?.doneCount,
+      successCount: finiteNumber(update.successCount) ?? previous?.successCount,
+      errorCount: finiteNumber(update.errorCount) ?? previous?.errorCount,
+      status,
+      message: update.message ?? previous?.message,
+      localPath: update.localPath ?? previous?.localPath,
+      totalBytes,
+      doneBytes,
+      speedBytesPerSec,
+      etaSeconds,
+      startedAtMs: finiteNumber(update.startedAtMs) ?? previous?.startedAtMs,
+      updatedAtMs,
+      finishedAtMs: finiteNumber(update.finishedAtMs) ?? previous?.finishedAtMs,
     };
   }, []);
 
@@ -808,10 +877,10 @@ function App() {
                 {sessionConfig && (
 	                <div className="transfer-toggle">
 	                  <button
-	                    className="transfer-btn"
+                    className="transfer-btn"
                     type="button"
                     onClick={() => {
-                      setTransferView('download');
+                      setTransferView('all');
                       setShowTransfers(true);
                     }}
                     title="传输进度"

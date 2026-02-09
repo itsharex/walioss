@@ -55,6 +55,31 @@
     color: #ffffff;
 }
 
+.transfer-tab-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.transfer-tab-icon {
+    display: inline-flex;
+    width: 16px;
+    justify-content: center;
+    font-weight: 800;
+}
+
+.transfer-tab-icon.all {
+    color: #fbbf24;
+}
+
+.transfer-tab-icon.download {
+    color: #60a5fa;
+}
+
+.transfer-tab-icon.upload {
+    color: #34d399;
+}
+
 .transfer-close-btn {
     flex-shrink: 0;
 }
@@ -87,6 +112,41 @@
 
 .transfer-search::placeholder {
     color: rgba(255, 255, 255, 0.45);
+}
+
+.transfer-toolbar-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.transfer-bulk-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.transfer-bulk-btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.86);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.transfer-bulk-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+
+.transfer-bulk-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .transfer-count {
@@ -143,7 +203,8 @@
     min-width: 0;
 }
 
-.transfer-group-toggle {
+.transfer-group-toggle,
+.transfer-expand-toggle {
     width: 20px;
     height: 20px;
     border-radius: 7px;
@@ -157,7 +218,8 @@
     transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.transfer-group-toggle:hover {
+.transfer-group-toggle:hover,
+.transfer-expand-toggle:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.25);
 }
@@ -231,6 +293,45 @@
     min-width: 0;
 }
 
+.transfer-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.transfer-type-mark {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.transfer-type-mark.upload {
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.45);
+    background: rgba(16, 185, 129, 0.12);
+}
+
+.transfer-type-mark.download {
+    color: #60a5fa;
+    border-color: rgba(96, 165, 250, 0.45);
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.transfer-type-mark.compact {
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+}
+
 .transfer-name {
     font-size: 13px;
     font-weight: 700;
@@ -253,6 +354,35 @@
 
 .transfer-local {
     color: rgba(255, 255, 255, 0.45);
+}
+
+.transfer-local-link {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+}
+
+.transfer-local-link:hover {
+    color: rgba(186, 230, 253, 0.95);
+    text-decoration: underline;
+}
+
+.transfer-local-link:focus-visible {
+    outline: 2px solid rgba(79, 172, 254, 0.45);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.transfer-child-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
 }
 
 .transfer-badge {
@@ -422,6 +552,18 @@ body.theme-light .transfer-tab-btn.active {
     color: rgba(15, 23, 42, 0.92);
 }
 
+body.theme-light .transfer-tab-icon.all {
+    color: #d97706;
+}
+
+body.theme-light .transfer-tab-icon.download {
+    color: #2563eb;
+}
+
+body.theme-light .transfer-tab-icon.upload {
+    color: #059669;
+}
+
 body.theme-light .transfer-close-btn {
     background: rgba(15, 23, 42, 0.04);
     border: 1px solid rgba(15, 23, 42, 0.1);
@@ -434,6 +576,17 @@ body.theme-light .transfer-close-btn:hover {
 
 body.theme-light .transfer-modal-toolbar {
     border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+body.theme-light .transfer-bulk-btn {
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    background: rgba(15, 23, 42, 0.04);
+    color: rgba(15, 23, 42, 0.86);
+}
+
+body.theme-light .transfer-bulk-btn:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.08);
+    color: rgba(15, 23, 42, 0.98);
 }
 
 body.theme-light .transfer-search {
@@ -464,13 +617,15 @@ body.theme-light .transfer-group-card {
     background: linear-gradient(180deg, rgba(14, 165, 233, 0.08) 0%, rgba(255, 255, 255, 0.72) 100%);
 }
 
-body.theme-light .transfer-group-toggle {
+body.theme-light .transfer-group-toggle,
+body.theme-light .transfer-expand-toggle {
     border: 1px solid rgba(15, 23, 42, 0.15);
     background: rgba(15, 23, 42, 0.04);
     color: rgba(15, 23, 42, 0.8);
 }
 
-body.theme-light .transfer-group-toggle:hover {
+body.theme-light .transfer-group-toggle:hover,
+body.theme-light .transfer-expand-toggle:hover {
     background: rgba(15, 23, 42, 0.08);
     border-color: rgba(15, 23, 42, 0.24);
 }
@@ -500,6 +655,23 @@ body.theme-light .transfer-name {
     color: rgba(15, 23, 42, 0.92);
 }
 
+body.theme-light .transfer-type-mark {
+    border-color: rgba(15, 23, 42, 0.16);
+    background: rgba(15, 23, 42, 0.04);
+}
+
+body.theme-light .transfer-type-mark.upload {
+    color: #059669;
+    border-color: rgba(5, 150, 105, 0.35);
+    background: rgba(16, 185, 129, 0.12);
+}
+
+body.theme-light .transfer-type-mark.download {
+    color: #2563eb;
+    border-color: rgba(37, 99, 235, 0.35);
+    background: rgba(59, 130, 246, 0.12);
+}
+
 body.theme-light .transfer-path,
 body.theme-light .transfer-local {
     color: rgba(15, 23, 42, 0.55);
@@ -507,6 +679,14 @@ body.theme-light .transfer-local {
 
 body.theme-light .transfer-local {
     color: rgba(15, 23, 42, 0.45);
+}
+
+body.theme-light .transfer-local-link:hover {
+    color: rgba(2, 132, 199, 0.95);
+}
+
+body.theme-light .transfer-local-link:focus-visible {
+    outline-color: rgba(2, 132, 199, 0.4);
 }
 
 body.theme-light .transfer-badge {

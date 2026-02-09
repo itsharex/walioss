@@ -4,6 +4,7 @@ import './Modal.css';
 
 type TransferStatus = 'queued' | 'in-progress' | 'success' | 'error';
 type TransferType = 'upload' | 'download';
+type TransferView = 'all' | TransferType;
 
 export type TransferRecord = {
   id: string;
@@ -75,10 +76,18 @@ function transferMatches(t: TransferRecord, q: string) {
   return `${t.name} ${t.bucket} ${t.key} ${t.localPath || ''}`.toLowerCase().includes(q);
 }
 
+function transferTypeLabel(type: TransferType) {
+  return type === 'upload' ? 'Upload' : 'Download';
+}
+
+function transferTypeIcon(type: TransferType) {
+  return type === 'upload' ? '↑' : '↓';
+}
+
 interface TransferModalProps {
   isOpen: boolean;
-  activeTab: TransferType;
-  onTabChange: (tab: TransferType) => void;
+  activeTab: TransferView;
+  onTabChange: (tab: TransferView) => void;
   transfers: TransferRecord[];
   onClose: () => void;
   onReveal: (path: string) => void;
@@ -87,17 +96,29 @@ interface TransferModalProps {
 
 export default function TransferModal({ isOpen, activeTab, onTabChange, transfers, onClose, onReveal, onOpen }: TransferModalProps) {
   const [search, setSearch] = useState('');
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Record<string, boolean>>({});
+  const [expandedItemIds, setExpandedItemIds] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (!isOpen) {
       setSearch('');
-      setExpandedGroupIds({});
+      setExpandedItemIds({});
     }
   }, [isOpen]);
 
   const view = useMemo(() => {
-    const base = transfers.filter((t) => t.type === activeTab);
+    const base = activeTab === 'all' ? transfers : transfers.filter((t) => t.type === activeTab);
     const byId = new Map(base.map((t) => [t.id, t]));
     const childrenByParent = new Map<string, TransferRecord[]>();
     const groups: TransferRecord[] = [];
@@ -142,12 +163,58 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
     return {
       grouped,
       standalone: standaloneVisible,
+      rootIds: [...grouped.map((g) => g.group.id), ...standaloneVisible.map((t) => t.id)],
       query: q,
       taskCount: grouped.length + standaloneVisible.length,
     };
   }, [activeTab, search, transfers]);
 
   if (!isOpen) return null;
+
+  const handleRevealLocalPath = (localPath?: string) => {
+    if (!localPath) return;
+    onReveal(localPath);
+  };
+
+  const hasManualExpandState = (id: string) => Object.prototype.hasOwnProperty.call(expandedItemIds, id);
+  const isItemExpanded = (id: string, autoExpanded = false) => {
+    if (hasManualExpandState(id)) {
+      return !!expandedItemIds[id];
+    }
+    return autoExpanded;
+  };
+  const toggleItemExpanded = (id: string, autoExpanded = false) => {
+    setExpandedItemIds((prev) => {
+      const current = Object.prototype.hasOwnProperty.call(prev, id) ? !!prev[id] : autoExpanded;
+      return { ...prev, [id]: !current };
+    });
+  };
+  const handleExpandAll = () => {
+    setExpandedItemIds((prev) => {
+      if (view.rootIds.length === 0) return prev;
+      const next = { ...prev };
+      for (const id of view.rootIds) {
+        next[id] = true;
+      }
+      return next;
+    });
+  };
+  const handleCollapseAll = () => {
+    setExpandedItemIds((prev) => {
+      if (view.rootIds.length === 0) return prev;
+      const next = { ...prev };
+      for (const id of view.rootIds) {
+        next[id] = false;
+      }
+      return next;
+    });
+  };
+
+  const renderTypeMark = (type: TransferType, compact = false) => (
+    <span className={`transfer-type-mark ${type} ${compact ? 'compact' : ''}`} title={transferTypeLabel(type)}>
+      {transferTypeIcon(type)}
+    </span>
+  );
 
   const renderTransferActions = (t: TransferRecord) =>
     t.type === 'download' &&
@@ -167,21 +234,39 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
     const progress = formatProgress(t.doneBytes, t.totalBytes);
     const showProgress = t.status === 'in-progress' || t.status === 'queued';
     const ossPath = `oss://${t.bucket}/${t.key}`;
+    const expanded = isItemExpanded(t.id);
 
     return (
       <div key={t.id} className="transfer-card">
         <div className="transfer-card-top">
           <div className="transfer-main">
-            <div className="transfer-name" title={t.name}>
-              {t.name}
+            <div className="transfer-title-row">
+              <button
+                className="transfer-expand-toggle"
+                type="button"
+                aria-label={expanded ? 'Collapse task details' : 'Expand task details'}
+                onClick={() => toggleItemExpanded(t.id)}
+              >
+                {expanded ? '▾' : '▸'}
+              </button>
+              {renderTypeMark(t.type)}
+              <div className="transfer-name" title={t.name}>
+                {t.name}
+              </div>
             </div>
             <div className="transfer-path" title={ossPath}>
               {ossPath}
             </div>
             {t.localPath && (
-              <div className="transfer-local" title={t.localPath}>
+              <button
+                className="transfer-local transfer-local-link"
+                type="button"
+                onClick={() => handleRevealLocalPath(t.localPath)}
+                title={`Reveal in Finder: ${t.localPath}`}
+                aria-label="Reveal local path in Finder"
+              >
                 {t.localPath}
-              </div>
+              </button>
             )}
           </div>
           <div className="transfer-status">
@@ -189,35 +274,39 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
           </div>
         </div>
 
-        {showProgress && (
-          <div className="transfer-progress">
-            <div className="transfer-progress-bar">
-              <div className="transfer-progress-fill" style={{ width: `${progress}%` }} />
+        {expanded && (
+          <>
+            {showProgress && (
+              <div className="transfer-progress">
+                <div className="transfer-progress-bar">
+                  <div className="transfer-progress-fill" style={{ width: `${progress}%` }} />
+                </div>
+                <div className="transfer-progress-meta">
+                  <span>{t.totalBytes ? `${formatBytes(t.doneBytes)} / ${formatBytes(t.totalBytes)}` : '-'}</span>
+                  <span>{progress > 0 ? `${progress.toFixed(1)}%` : '-'}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="transfer-meta-row">
+              <div className="transfer-meta-item">
+                <div className="meta-label">Size</div>
+                <div className="meta-value">{formatBytes(t.totalBytes)}</div>
+              </div>
+              <div className="transfer-meta-item">
+                <div className="meta-label">Speed</div>
+                <div className="meta-value">{formatSpeed(t.speedBytesPerSec)}</div>
+              </div>
+              <div className="transfer-meta-item">
+                <div className="meta-label">ETA</div>
+                <div className="meta-value">{formatEta(t.etaSeconds)}</div>
+              </div>
             </div>
-            <div className="transfer-progress-meta">
-              <span>{t.totalBytes ? `${formatBytes(t.doneBytes)} / ${formatBytes(t.totalBytes)}` : '-'}</span>
-              <span>{progress > 0 ? `${progress.toFixed(1)}%` : '-'}</span>
-            </div>
-          </div>
+
+            {t.message && <div className="transfer-message">{t.message}</div>}
+            {renderTransferActions(t)}
+          </>
         )}
-
-        <div className="transfer-meta-row">
-          <div className="transfer-meta-item">
-            <div className="meta-label">Size</div>
-            <div className="meta-value">{formatBytes(t.totalBytes)}</div>
-          </div>
-          <div className="transfer-meta-item">
-            <div className="meta-label">Speed</div>
-            <div className="meta-value">{formatSpeed(t.speedBytesPerSec)}</div>
-          </div>
-          <div className="transfer-meta-item">
-            <div className="meta-label">ETA</div>
-            <div className="meta-value">{formatEta(t.etaSeconds)}</div>
-          </div>
-        </div>
-
-        {t.message && <div className="transfer-message">{t.message}</div>}
-        {renderTransferActions(t)}
       </div>
     );
   };
@@ -229,13 +318,28 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
           <div className="transfer-modal-title">Transfers</div>
           <div className="transfer-modal-tabs" role="tablist" aria-label="Transfer tabs">
             <button
+              className={`transfer-tab-btn ${activeTab === 'all' ? 'active' : ''}`}
+              type="button"
+              onClick={() => onTabChange('all')}
+              role="tab"
+              aria-selected={activeTab === 'all'}
+            >
+              <span className="transfer-tab-inner">
+                <span className="transfer-tab-icon all">⇅</span>
+                <span>All</span>
+              </span>
+            </button>
+            <button
               className={`transfer-tab-btn ${activeTab === 'download' ? 'active' : ''}`}
               type="button"
               onClick={() => onTabChange('download')}
               role="tab"
               aria-selected={activeTab === 'download'}
             >
-              Downloads
+              <span className="transfer-tab-inner">
+                <span className="transfer-tab-icon download">↓</span>
+                <span>Downloads</span>
+              </span>
             </button>
             <button
               className={`transfer-tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
@@ -244,7 +348,10 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
               role="tab"
               aria-selected={activeTab === 'upload'}
             >
-              Uploads
+              <span className="transfer-tab-inner">
+                <span className="transfer-tab-icon upload">↑</span>
+                <span>Uploads</span>
+              </span>
             </button>
           </div>
           <button className="icon-close-btn transfer-close-btn" type="button" onClick={onClose} aria-label="Close transfers" title="Close">
@@ -260,16 +367,39 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name / bucket / key"
           />
-          <div className="transfer-count">{view.taskCount} tasks</div>
+          <div className="transfer-toolbar-right">
+            <div className="transfer-bulk-actions">
+              <button
+                className="transfer-bulk-btn"
+                type="button"
+                onClick={handleExpandAll}
+                disabled={view.taskCount <= 0}
+              >
+                Expand All
+              </button>
+              <button
+                className="transfer-bulk-btn"
+                type="button"
+                onClick={handleCollapseAll}
+                disabled={view.taskCount <= 0}
+              >
+                Collapse All
+              </button>
+            </div>
+            <div className="transfer-count">{view.taskCount} tasks</div>
+          </div>
         </div>
 
         <div className="transfer-modal-body">
           {view.taskCount === 0 ? (
-            <div className="transfer-empty-large">No {activeTab === 'download' ? 'downloads' : 'uploads'}.</div>
+            <div className="transfer-empty-large">
+              No {activeTab === 'all' ? 'transfers' : activeTab === 'download' ? 'downloads' : 'uploads'}.
+            </div>
           ) : (
             <div className="transfer-list-large">
               {view.grouped.map(({ group, children, visibleChildren }) => {
-                const expanded = !!expandedGroupIds[group.id] || (!!view.query && visibleChildren.length > 0);
+                const autoExpanded = !!view.query && visibleChildren.length > 0;
+                const expanded = isItemExpanded(group.id, autoExpanded);
                 const progress = formatProgress(group.doneBytes, group.totalBytes);
                 const showProgress = group.status === 'in-progress' || group.status === 'queued';
                 const ossPath = `oss://${group.bucket}/${group.key}`;
@@ -282,13 +412,14 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
                       <div className="transfer-main">
                         <div className="transfer-group-head">
                           <button
-                            className="transfer-group-toggle"
+                            className="transfer-expand-toggle"
                             type="button"
                             aria-label={expanded ? 'Collapse task details' : 'Expand task details'}
-                            onClick={() => setExpandedGroupIds((prev) => ({ ...prev, [group.id]: !expanded }))}
+                            onClick={() => toggleItemExpanded(group.id, autoExpanded)}
                           >
                             {expanded ? '▾' : '▸'}
                           </button>
+                          {renderTypeMark(group.type)}
                           <div className="transfer-name" title={group.name}>
                             {group.name}
                           </div>
@@ -297,9 +428,15 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
                           {ossPath}
                         </div>
                         {group.localPath && (
-                          <div className="transfer-local" title={group.localPath}>
+                          <button
+                            className="transfer-local transfer-local-link"
+                            type="button"
+                            onClick={() => handleRevealLocalPath(group.localPath)}
+                            title={`Reveal in Finder: ${group.localPath}`}
+                            aria-label="Reveal local path in Finder"
+                          >
                             {group.localPath}
-                          </div>
+                          </button>
                         )}
                         <div className="transfer-group-summary">
                           {doneCount} / {fileCount} files
@@ -311,56 +448,72 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
                       </div>
                     </div>
 
-                    {showProgress && (
-                      <div className="transfer-progress">
-                        <div className="transfer-progress-bar">
-                          <div className="transfer-progress-fill" style={{ width: `${progress}%` }} />
-                        </div>
-                        <div className="transfer-progress-meta">
-                          <span>{group.totalBytes ? `${formatBytes(group.doneBytes)} / ${formatBytes(group.totalBytes)}` : '-'}</span>
-                          <span>{progress > 0 ? `${progress.toFixed(1)}%` : '-'}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {group.message && <div className="transfer-message">{group.message}</div>}
-                    {renderTransferActions(group)}
-
                     {expanded && (
-                      <div className="transfer-group-children">
-                        {(view.query ? visibleChildren : children).map((child) => {
-                          const childProgress = formatProgress(child.doneBytes, child.totalBytes);
-                          const childShowProgress = child.status === 'in-progress' || child.status === 'queued';
-                          const childOssPath = `oss://${child.bucket}/${child.key}`;
-
-                          return (
-                            <div key={child.id} className="transfer-child-card">
-                              <div className="transfer-child-head">
-                                <div className="transfer-child-name" title={child.name}>
-                                  {child.name}
-                                </div>
-                                <span className={`transfer-badge ${child.status}`}>{child.status}</span>
-                              </div>
-                              <div className="transfer-child-path" title={childOssPath}>
-                                {childOssPath}
-                              </div>
-                              {childShowProgress && (
-                                <div className="transfer-child-progress">
-                                  <div className="transfer-progress-bar">
-                                    <div className="transfer-progress-fill" style={{ width: `${childProgress}%` }} />
-                                  </div>
-                                  <div className="transfer-progress-meta">
-                                    <span>{child.totalBytes ? `${formatBytes(child.doneBytes)} / ${formatBytes(child.totalBytes)}` : '-'}</span>
-                                    <span>{childProgress > 0 ? `${childProgress.toFixed(1)}%` : '-'}</span>
-                                  </div>
-                                </div>
-                              )}
-                              {child.message && <div className="transfer-message">{child.message}</div>}
-                              {renderTransferActions(child)}
+                      <>
+                        {showProgress && (
+                          <div className="transfer-progress">
+                            <div className="transfer-progress-bar">
+                              <div className="transfer-progress-fill" style={{ width: `${progress}%` }} />
                             </div>
-                          );
-                        })}
-                      </div>
+                            <div className="transfer-progress-meta">
+                              <span>{group.totalBytes ? `${formatBytes(group.doneBytes)} / ${formatBytes(group.totalBytes)}` : '-'}</span>
+                              <span>{progress > 0 ? `${progress.toFixed(1)}%` : '-'}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {group.message && <div className="transfer-message">{group.message}</div>}
+                        {renderTransferActions(group)}
+
+                        <div className="transfer-group-children">
+                          {(view.query ? visibleChildren : children).map((child) => {
+                            const childProgress = formatProgress(child.doneBytes, child.totalBytes);
+                            const childShowProgress = child.status === 'in-progress' || child.status === 'queued';
+                            const childOssPath = `oss://${child.bucket}/${child.key}`;
+
+                            return (
+                              <div key={child.id} className="transfer-child-card">
+                                <div className="transfer-child-head">
+                                  <div className="transfer-child-title">
+                                    {renderTypeMark(child.type, true)}
+                                    <div className="transfer-child-name" title={child.name}>
+                                      {child.name}
+                                    </div>
+                                  </div>
+                                  <span className={`transfer-badge ${child.status}`}>{child.status}</span>
+                                </div>
+                                <div className="transfer-child-path" title={childOssPath}>
+                                  {childOssPath}
+                                </div>
+                                {child.localPath && (
+                                  <button
+                                    className="transfer-local transfer-local-link"
+                                    type="button"
+                                    onClick={() => handleRevealLocalPath(child.localPath)}
+                                    title={`Reveal in Finder: ${child.localPath}`}
+                                    aria-label="Reveal local path in Finder"
+                                  >
+                                    {child.localPath}
+                                  </button>
+                                )}
+                                {childShowProgress && (
+                                  <div className="transfer-child-progress">
+                                    <div className="transfer-progress-bar">
+                                      <div className="transfer-progress-fill" style={{ width: `${childProgress}%` }} />
+                                    </div>
+                                    <div className="transfer-progress-meta">
+                                      <span>{child.totalBytes ? `${formatBytes(child.doneBytes)} / ${formatBytes(child.totalBytes)}` : '-'}</span>
+                                      <span>{childProgress > 0 ? `${childProgress.toFixed(1)}%` : '-'}</span>
+                                    </div>
+                                  </div>
+                                )}
+                                {child.message && <div className="transfer-message">{child.message}</div>}
+                                {renderTransferActions(child)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
                     )}
                   </div>
                 );

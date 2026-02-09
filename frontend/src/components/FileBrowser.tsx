@@ -21,6 +21,16 @@ interface FileBrowserProps {
 const DEFAULT_TABLE_COLUMN_WIDTHS = [44, 440, 110, 120, 190, 200];
 const MIN_TABLE_COLUMN_WIDTHS = [44, 180, 70, 80, 120, 160];
 const DEFAULT_PAGE_SIZE = 200;
+const BOOKMARK_POPUP_DEFAULT_WIDTH = 560;
+const BOOKMARK_POPUP_MIN_WIDTH = 420;
+const BOOKMARK_POPUP_VIEWPORT_MARGIN = 56;
+
+const clampBookmarkPopupWidth = (value: number) => {
+  const viewportMax = typeof window !== 'undefined'
+    ? Math.max(BOOKMARK_POPUP_MIN_WIDTH, window.innerWidth - BOOKMARK_POPUP_VIEWPORT_MARGIN)
+    : BOOKMARK_POPUP_DEFAULT_WIDTH;
+  return Math.max(BOOKMARK_POPUP_MIN_WIDTH, Math.min(Math.round(value), viewportMax));
+};
 
 const sumWidths = (widths: number[]) => widths.reduce((sum, w) => sum + w, 0);
 
@@ -162,6 +172,13 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
   const tableVisible = !!currentBucket && objects.length > 0;
 
   const storageKey = profileName ? `oss-bookmarks:${profileName}` : null;
+  const bookmarkPopupWidthStorageKey = profileName ? `oss-bookmark-popup-width:${profileName}` : 'oss-bookmark-popup-width:default';
+  const [bookmarkPopupWidth, setBookmarkPopupWidth] = useState<number>(BOOKMARK_POPUP_DEFAULT_WIDTH);
+  const bookmarkPopupResizeStateRef = useRef<{ active: boolean; startX: number; startWidth: number }>({
+    active: false,
+    startX: 0,
+    startWidth: BOOKMARK_POPUP_DEFAULT_WIDTH,
+  });
 
   const normalizeBucketName = (bucket: string) => bucket.trim().replace(/^\/+/, '').replace(/\/+$/, '');
 
@@ -206,6 +223,64 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
   useEffect(() => {
     setBookmarkMenuOpen(false);
   }, [storageKey]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(bookmarkPopupWidthStorageKey);
+      if (!raw) {
+        setBookmarkPopupWidth(clampBookmarkPopupWidth(BOOKMARK_POPUP_DEFAULT_WIDTH));
+        return;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        setBookmarkPopupWidth(clampBookmarkPopupWidth(BOOKMARK_POPUP_DEFAULT_WIDTH));
+        return;
+      }
+      setBookmarkPopupWidth(clampBookmarkPopupWidth(parsed));
+    } catch {
+      setBookmarkPopupWidth(clampBookmarkPopupWidth(BOOKMARK_POPUP_DEFAULT_WIDTH));
+    }
+  }, [bookmarkPopupWidthStorageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(bookmarkPopupWidthStorageKey, String(Math.round(bookmarkPopupWidth)));
+    } catch {
+      // Ignore localStorage write errors.
+    }
+  }, [bookmarkPopupWidth, bookmarkPopupWidthStorageKey]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setBookmarkPopupWidth((prev) => clampBookmarkPopupWidth(prev));
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const stopResizing = () => {
+      if (!bookmarkPopupResizeStateRef.current.active) return;
+      bookmarkPopupResizeStateRef.current.active = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const state = bookmarkPopupResizeStateRef.current;
+      if (!state.active) return;
+      const delta = event.clientX - state.startX;
+      setBookmarkPopupWidth(clampBookmarkPopupWidth(state.startWidth + delta));
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', stopResizing);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', stopResizing);
+      stopResizing();
+    };
+  }, []);
 
   useEffect(() => {
     setPreviewModalOpen(false);
@@ -709,6 +784,18 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
     if (!profileName) return;
     setContextMenu((prev) => (prev.visible ? { ...prev, visible: false } : prev));
     setBookmarkMenuOpen((v) => !v);
+  };
+
+  const handleBookmarkPopupResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    bookmarkPopupResizeStateRef.current = {
+      active: true,
+      startX: e.clientX,
+      startWidth: bookmarkPopupWidth,
+    };
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
   };
 
   const handleBookmarkClick = (bookmark: Bookmark) => {
@@ -1425,7 +1512,11 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
               </svg>
             </button>
             {bookmarkMenuOpen && (
-              <div className="bookmark-popup" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="bookmark-popup"
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: `${bookmarkPopupWidth}px` }}
+              >
                 <div className="bookmark-popup-title">Bookmarks</div>
                 {bookmarks.length === 0 ? (
                   <div className="bookmark-popup-empty">No bookmarks</div>
@@ -1459,6 +1550,11 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
                     ))}
                   </div>
                 )}
+                <div
+                  className="bookmark-popup-resizer"
+                  onMouseDown={handleBookmarkPopupResizeStart}
+                  title="拖拽调整宽度"
+                />
               </div>
             )}
           </div>

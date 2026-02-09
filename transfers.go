@@ -950,10 +950,12 @@ func (s *OSSService) EnqueueDownloadFolder(config OSSConfig, bucket string, fold
 }
 
 var (
-	reOKSize    = regexp.MustCompile(`(?i)\bOK\s*size:\s*([0-9][0-9,]*)(?:\b|$)`)
-	reProgress  = regexp.MustCompile(`(?i)\bProgress:\s*([0-9]+(?:\.[0-9]+)?)\s*%`)
-	reSpeedUnit = regexp.MustCompile(`(?i)\bSpeed:\s*([0-9]+(?:\.[0-9]+)?)\s*([kmgtp]?)(?:i)?b/s`)
-	reANSIEsc   = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
+	reOKSize      = regexp.MustCompile(`(?i)\bOK\s*size:\s*([0-9][0-9,]*)(?:\b|$)`)
+	reProgress    = regexp.MustCompile(`(?i)\bProgress:\s*([0-9]+(?:\.[0-9]+)?)\s*%`)
+	reProgressAny = regexp.MustCompile(`(?i)([0-9]+(?:\.[0-9]+)?)\s*%`)
+	reSpeedUnit   = regexp.MustCompile(`(?i)\bSpeed:\s*([0-9]+(?:\.[0-9]+)?)\s*([kmgtp]?)(?:i)?b/s`)
+	reSpeedLoose  = regexp.MustCompile(`(?i)\bspeed(?:\s+is)?\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:\(\s*)?([kmgtp]?)(?:i)?(?:b|byte)/s`)
+	reANSIEsc     = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 )
 
 func stripANSI(s string) string {
@@ -1010,11 +1012,30 @@ func parseProgressSegment(seg string) parsedProgress {
 			out.hasPercent = true
 		}
 	}
+	if !out.hasPercent {
+		if m := reProgressAny.FindStringSubmatch(clean); len(m) == 2 {
+			if v, err := strconv.ParseFloat(m[1], 64); err == nil && v >= 0 {
+				if v > 100 {
+					v = 100
+				}
+				out.percent = v
+				out.hasPercent = true
+			}
+		}
+	}
 
 	if m := reSpeedUnit.FindStringSubmatch(clean); len(m) == 3 {
 		if v, err := strconv.ParseFloat(m[1], 64); err == nil {
 			out.speedBps = speedToBps(v, m[2])
 			out.hasSpeed = true
+		}
+	}
+	if !out.hasSpeed {
+		if m := reSpeedLoose.FindStringSubmatch(clean); len(m) == 3 {
+			if v, err := strconv.ParseFloat(m[1], 64); err == nil {
+				out.speedBps = speedToBps(v, m[2])
+				out.hasSpeed = true
+			}
 		}
 	}
 
