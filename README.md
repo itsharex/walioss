@@ -87,7 +87,7 @@ It is designed for daily bucket/object operations with a native-app style workfl
 ### Appearance & app behavior
 - Dark/Light themes with smooth transitions.
 - Minimum window size is enforced (`900x760`).
-- About dialog shows app name/version from `appinfo.json` and GitHub link.
+- About dialog shows app name/GitHub link from `appinfo.json`, and version from `frontend/package.json` (fallback: `appinfo.json`).
 
 ## Tech stack
 - Backend: Go + Wails + Alibaba Cloud OSS SDK
