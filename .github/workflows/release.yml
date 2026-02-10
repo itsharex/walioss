@@ -11,8 +11,16 @@ permissions:
 
 jobs:
   build:
-    name: Build (macOS)
-    runs-on: macos-latest
+    name: Build (macOS ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            arch: amd64
+          - os: macos-14
+            arch: arm64
 
     steps:
       - name: Checkout
@@ -47,13 +55,13 @@ jobs:
       - name: Package artifact
         run: |
           cd build/bin
-          zip -r "../../walioss-macOS-${{ github.ref_name }}.zip" .
+          zip -r "../../walioss-macOS-${{ matrix.arch }}-${{ github.ref_name }}.zip" .
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: walioss-macOS-${{ github.ref_name }}
-          path: walioss-macOS-${{ github.ref_name }}.zip
+          name: walioss-macOS-${{ matrix.arch }}-${{ github.ref_name }}
+          path: walioss-macOS-${{ matrix.arch }}-${{ github.ref_name }}.zip
 
   release:
     name: Create GitHub Release
