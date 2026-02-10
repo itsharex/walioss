@@ -385,7 +385,6 @@
     justify-content: center;
     flex-shrink: 0;
     opacity: 0.9;
-    color: rgba(251, 191, 36, 0.95);
 }
 
 .crumb-popover-item-name {
