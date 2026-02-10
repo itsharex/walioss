@@ -11,16 +11,18 @@ permissions:
 
 jobs:
   build:
-    name: Build (macOS ${{ matrix.arch }})
+    name: Build (${{ matrix.platform }} ${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-13
-            arch: amd64
           - os: macos-14
+            platform: macOS
             arch: arm64
+          - os: windows-latest
+            platform: Windows
+            arch: x64
 
     steps:
       - name: Checkout
@@ -45,23 +47,40 @@ jobs:
         run: pnpm -C frontend install --no-frozen-lockfile
 
       - name: Install Wails CLI
+        if: runner.os != 'Windows'
         run: |
           go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
+      - name: Install Wails CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+          $gopath = go env GOPATH
+          "$gopath\\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
       - name: Build app
         run: wails build -clean
 
-      - name: Package artifact
+      - name: Package artifact (macOS)
+        if: runner.os == 'macOS'
         run: |
           cd build/bin
-          zip -r "../../walioss-macOS-${{ matrix.arch }}-${{ github.ref_name }}.zip" .
+          zip -r "../../walioss-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.ref_name }}.zip" .
+
+      - name: Package artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $zipPath = "walioss-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.ref_name }}.zip"
+          Compress-Archive -Path "build/bin/*" -DestinationPath $zipPath
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: walioss-macOS-${{ matrix.arch }}-${{ github.ref_name }}
-          path: walioss-macOS-${{ matrix.arch }}-${{ github.ref_name }}.zip
+          name: walioss-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.ref_name }}
+          path: walioss-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.ref_name }}.zip
 
   release:
     name: Create GitHub Release
