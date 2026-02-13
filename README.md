@@ -101,6 +101,43 @@ It is designed for daily bucket/object operations with a native-app style workfl
 - Wails CLI `v2.11+`
 - `ossutil v2` (in `PATH` or at `bin/ossutil`)
 
+## Build environment (Go + Wails)
+
+Walioss is a Wails desktop app, so you need both a Go environment and a Wails CLI environment before building.
+
+### 1) Install Go
+- Install Go `1.23+`
+- Verify:
+
+```bash
+go version
+```
+
+### 2) Install Node.js + pnpm
+- Install Node.js `18+`
+- Install pnpm (if missing):
+
+```bash
+npm install -g pnpm
+pnpm -v
+```
+
+### 3) Install Wails CLI
+
+```bash
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+```
+
+Ensure the Go bin directory is in your `PATH` so `wails` can be found:
+- macOS/Linux: `$(go env GOPATH)/bin`
+- Windows: `%USERPROFILE%\\go\\bin`
+
+Verify:
+
+```bash
+wails doctor
+```
+
 ## Run in development
 
 ```bash
@@ -112,10 +149,14 @@ wails dev
 ## Build locally
 
 ```bash
+# from project root
+pnpm -C frontend install
 wails build -clean
 ```
 
 Build output is generated under `build/bin`.
+
+If `wails` is not found, reopen your terminal after updating `PATH`, or run it with full path from your Go bin directory.
 
 ## Local data
 
