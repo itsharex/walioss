@@ -13,6 +13,7 @@ import './Modal.css';
 interface FileBrowserProps {
   config: main.OSSConfig;
   profileName: string | null;
+  listViewMode?: 'classic' | 'finder';
   initialPath?: string;
   onLocationChange?: (location: { bucket: string; prefix: string }) => void;
   onNotify?: (toast: { type: 'success' | 'error' | 'info'; message: string }) => void;
@@ -155,7 +156,8 @@ const readBookmarkReorderPayload = (dt: DataTransfer | null | undefined, fallbac
   return fallback;
 };
 
-function FileBrowser({ config, profileName, initialPath, onLocationChange, onNotify }: FileBrowserProps) {
+function FileBrowser({ config, profileName, listViewMode = 'finder', initialPath, onLocationChange, onNotify }: FileBrowserProps) {
+  const isFinderView = listViewMode !== 'classic';
   const [currentBucket, setCurrentBucket] = useState('');
   const [currentPrefix, setCurrentPrefix] = useState('');
   const [navState, setNavState] = useState<{ stack: NavLocation[]; index: number }>({
@@ -175,6 +177,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
   const activePathRef = useRef<string | null>(activePath);
   const previewModalOpenRef = useRef<boolean>(false);
   const currentBucketRef = useRef<string>(currentBucket);
+  const isFinderViewRef = useRef<boolean>(isFinderView);
 
   const thumbUrlCacheRef = useRef<Map<string, string>>(new Map());
   const thumbLoadingRef = useRef<Set<string>>(new Set());
@@ -209,6 +212,10 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
   useLayoutEffect(() => {
     currentBucketRef.current = currentBucket;
   }, [currentBucket]);
+
+  useLayoutEffect(() => {
+    isFinderViewRef.current = isFinderView;
+  }, [isFinderView]);
   const lastSelectionIndexRef = useRef<number | null>(null);
   const shiftPressedRef = useRef(false);
   const checkboxPointerShiftRef = useRef(false);
@@ -278,6 +285,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
 
       const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
       if (!isSpace) return;
+      if (!isFinderViewRef.current) return;
       if (previewModalOpenRef.current) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
@@ -1542,6 +1550,22 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
     if (isInteractiveRowTarget(e.target)) return;
 
     setContextMenu((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+
+    if (!isFinderView) {
+      if (e.shiftKey || shiftPressedRef.current) {
+        applyRowSelectionChange(obj, rowIndex, true, true);
+        return;
+      }
+      if (isFolder(obj)) {
+        const folderName = objectNameForKey(obj.name);
+        if (!folderName) return;
+        handleFolderClick(folderName);
+        return;
+      }
+      handlePreview(obj);
+      return;
+    }
+
     setActivePath(obj.path);
 
     if (e.shiftKey || shiftPressedRef.current) {
@@ -1567,6 +1591,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
 
   const handleRowDoubleClick = (e: React.MouseEvent, obj: main.ObjectInfo) => {
     if (isInteractiveRowTarget(e.target)) return;
+    if (!isFinderView) return;
     setContextMenu((prev) => (prev.visible ? { ...prev, visible: false } : prev));
 
     if (isFolder(obj)) {
@@ -1893,10 +1918,11 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
 	    previewObject?.path ? previewableFiles.findIndex((obj) => obj.path === previewObject.path) : -1;
 
     useEffect(() => {
+      if (!isFinderView) return;
       if (!focusedObject) return;
       if (!isImageObjectInfo(focusedObject)) return;
       void ensureThumbUrl(focusedObject);
-    }, [focusedObject, ensureThumbUrl]);
+    }, [focusedObject, ensureThumbUrl, isFinderView]);
 
 	  const handlePreviewNavigate = (direction: -1 | 1) => {
 	    if (previewIndex < 0) return;
@@ -2265,7 +2291,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
 	      )}
 
 	      <div
-          className={`browser-content ${currentBucket ? 'browser-upload-dropzone' : ''} ${currentBucket && objects.length > 0 ? 'browser-content-split' : ''}`.trim()}
+          className={`browser-content ${currentBucket ? 'browser-upload-dropzone' : ''} ${currentBucket && objects.length > 0 && isFinderView ? 'browser-content-split' : ''}`.trim()}
           style={currentBucket ? ({ ['--wails-drop-target' as any]: 'drop' }) : undefined}
         >
 	        {loading ? (
@@ -2317,7 +2343,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
                 <p>Folder is empty.</p>
              </div>
 	          ) : (
-	            <div className="browser-split">
+	            <div className={`browser-split ${isFinderView ? '' : 'browser-split-classic'}`.trim()}>
                 <div className="browser-split-left">
 	            <div className="file-table-container" onDragOver={handleTableDragOver} onDrop={handleTableDrop}>
 	              <div className="file-table-scroll" ref={tableViewportRef}>
@@ -2568,7 +2594,7 @@ function FileBrowser({ config, profileName, initialPath, onLocationChange, onNot
 	              </div>
 	            </div>
                 </div>
-                <div className="browser-split-right">{renderDetailsPane()}</div>
+                {isFinderView && <div className="browser-split-right">{renderDetailsPane()}</div>}
               </div>
 	          )
 	        )}

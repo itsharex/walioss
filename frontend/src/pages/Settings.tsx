@@ -32,6 +32,7 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
     theme: 'dark',
     maxTransferThreads: 3,
     newTabNameRule: 'folder',
+    fileListViewMode: 'finder',
   } as main.AppSettings);
 
   const [loading, setLoading] = useState(false);
@@ -66,6 +67,7 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
         ...loaded,
         workDir: loaded?.workDir || '~/.walioss',
         newTabNameRule: loaded?.newTabNameRule === 'newTab' ? 'newTab' : 'folder',
+        fileListViewMode: loaded?.fileListViewMode === 'classic' ? 'classic' : 'finder',
       });
       if (onThemeChange) {
         onThemeChange(loaded?.theme || 'dark');
@@ -262,6 +264,24 @@ function Settings({ isOpen, onBack, onThemeChange, onNotify, onSettingsSaved }: 
                       Light
                     </div>
                   </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">File List View</label>
+                  <div className="theme-toggle">
+                    <div
+                      className={`theme-option ${settings.fileListViewMode === 'finder' ? 'active' : ''}`}
+                      onClick={() => setSettings((prev) => ({ ...prev, fileListViewMode: 'finder' }))}
+                    >
+                      Finder Style
+                    </div>
+                    <div
+                      className={`theme-option ${settings.fileListViewMode === 'classic' ? 'active' : ''}`}
+                      onClick={() => setSettings((prev) => ({ ...prev, fileListViewMode: 'classic' }))}
+                    >
+                      Classic List
+                    </div>
+                  </div>
+                  <div className="settings-hint">Finder style uses single-click select + double-click/Space preview, with a right-side details pane.</div>
                 </div>
               </div>
             )}

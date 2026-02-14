@@ -190,6 +190,7 @@ func defaultAppSettings(workDir string) AppSettings {
 		Theme:              "dark",
 		MaxTransferThreads: 3,
 		NewTabNameRule:     "folder",
+		FileListViewMode:   "finder",
 	}
 }
 
@@ -219,6 +220,13 @@ func normalizeAppSettings(settings AppSettings, fallbackWorkDir string) AppSetti
 	case "folder", "newTab":
 	default:
 		out.NewTabNameRule = "folder"
+	}
+
+	out.FileListViewMode = strings.TrimSpace(out.FileListViewMode)
+	switch out.FileListViewMode {
+	case "classic", "finder":
+	default:
+		out.FileListViewMode = "finder"
 	}
 
 	return out

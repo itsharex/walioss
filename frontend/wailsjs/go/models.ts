@@ -24,6 +24,7 @@ export namespace main {
 	    theme: string;
 	    maxTransferThreads: number;
 	    newTabNameRule: string;
+	    fileListViewMode: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -38,6 +39,7 @@ export namespace main {
 	        this.theme = source["theme"];
 	        this.maxTransferThreads = source["maxTransferThreads"];
 	        this.newTabNameRule = source["newTabNameRule"];
+	        this.fileListViewMode = source["fileListViewMode"];
 	    }
 	}
 	export class BucketInfo {

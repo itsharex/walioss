@@ -722,6 +722,15 @@
     min-height: 0;
 }
 
+.browser-split-classic {
+    display: block;
+}
+
+.browser-split-classic .browser-split-left {
+    min-width: 0;
+    width: 100%;
+}
+
 .browser-split-left {
     flex: 1;
     min-width: 520px;

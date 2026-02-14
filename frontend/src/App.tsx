@@ -69,6 +69,8 @@ type TransferSummary = {
   progressPercent: number | null;
 };
 
+type FileListViewMode = 'classic' | 'finder';
+
 const TAB_REORDER_DRAG_TYPE = 'application/x-walioss-tab-reorder';
 const TRANSFER_DERIVED_SPEED_STALE_MS = 6000;
 const TRANSFER_PROFILE_ANONYMOUS = '__anonymous__';
@@ -169,6 +171,7 @@ function App() {
   const [globalView, setGlobalView] = useState<GlobalView>('session');
   const [theme, setTheme] = useState<string>('dark');
   const [newTabNameRule, setNewTabNameRule] = useState<'folder' | 'newTab'>('folder');
+  const [fileListViewMode, setFileListViewMode] = useState<FileListViewMode>('finder');
   const nextTabNumber = useRef(2);
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -240,8 +243,10 @@ function App() {
         const settings = await GetSettings();
         handleThemeChange(settings?.theme || 'dark');
         setNewTabNameRule(settings?.newTabNameRule === 'newTab' ? 'newTab' : 'folder');
+        setFileListViewMode(settings?.fileListViewMode === 'classic' ? 'classic' : 'finder');
       } catch {
         handleThemeChange('dark');
+        setFileListViewMode('finder');
       }
 
       try {
@@ -1040,6 +1045,7 @@ function App() {
 		                  <FileBrowser
 		                    config={sessionConfig}
 		                    profileName={sessionProfileName}
+                        listViewMode={fileListViewMode}
 		                    initialPath={sessionConfig.defaultPath}
 		                    onLocationChange={(loc) => handleTabLocationChange(t.id, loc.bucket, loc.prefix)}
                         onNotify={(t) => showToast(t.type, t.message)}
@@ -1054,7 +1060,10 @@ function App() {
 	          onBack={() => setGlobalView('session')}
 	          onThemeChange={handleThemeChange}
 	          onNotify={(t) => showToast(t.type, t.message)}
-	          onSettingsSaved={(settings) => applyNewTabNameRule(settings?.newTabNameRule === 'newTab' ? 'newTab' : 'folder')}
+	          onSettingsSaved={(settings) => {
+              applyNewTabNameRule(settings?.newTabNameRule === 'newTab' ? 'newTab' : 'folder');
+              setFileListViewMode(settings?.fileListViewMode === 'classic' ? 'classic' : 'finder');
+            }}
 	        />
 		        <AboutModal
 		          isOpen={aboutOpen}

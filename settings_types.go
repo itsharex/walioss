@@ -8,5 +8,6 @@ type AppSettings struct {
 	DefaultEndpoint    string `json:"defaultEndpoint"`
 	Theme              string `json:"theme"` // "light" or "dark"
 	MaxTransferThreads int    `json:"maxTransferThreads"`
-	NewTabNameRule     string `json:"newTabNameRule"` // "folder" | "newTab"
+	NewTabNameRule     string `json:"newTabNameRule"`   // "folder" | "newTab"
+	FileListViewMode   string `json:"fileListViewMode"` // "classic" | "finder"
 }
