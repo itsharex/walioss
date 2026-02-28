@@ -1348,7 +1348,14 @@ function FileBrowser({ config, profileName, listViewMode = 'finder', initialPath
     if (!currentBucket) return;
     const cleaned = paths.map((p) => (p || '').trim()).filter((p) => !!p);
     if (cleaned.length === 0) return;
-    await enqueueUploadWithRenamePrompt(config, currentBucket, currentPrefix, cleaned);
+    try {
+      const ids = await enqueueUploadWithRenamePrompt(config, currentBucket, currentPrefix, cleaned);
+      if (Array.isArray(ids) && ids.length > 0) {
+        onNotify?.({ type: 'success', message: ids.length > 1 ? `Upload task created successfully (${ids.length} items)` : 'Upload task created successfully' });
+      }
+    } catch (err: any) {
+      setError(err?.message || "Upload failed");
+    }
   };
 
   const handleUploadFile = async () => {

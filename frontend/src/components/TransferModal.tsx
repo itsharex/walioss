@@ -225,7 +225,7 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
 
     const grouped = groups
       .map((group): GroupedTransfer | null => {
-        const children = [...(childrenByParent.get(group.id) || [])].sort((a, b) => transferSortValue(b) - transferSortValue(a));
+        const children = [...(childrenByParent.get(group.id) || [])].sort((a, b) => a.id.localeCompare(b.id)); // STABLE SORT BY ID
         const visibleChildren = q ? children.filter((c) => transferMatches(c, q)) : children;
         const groupMatch = transferMatches(group, q);
         if (q && !groupMatch && visibleChildren.length === 0) return null;
@@ -627,20 +627,20 @@ export default function TransferModal({ isOpen, activeTab, onTabChange, transfer
 	                      </div>
 	                    </div>
 
+                      {showProgress && (
+                        <div className="transfer-progress transfer-progress-short">
+                          <div className="transfer-progress-bar">
+                            <div className="transfer-progress-fill" style={{ width: `${progress}%` }} />
+                          </div>
+                          <div className="transfer-progress-meta">
+                            <span>{group.totalBytes ? `${formatBytes(group.doneBytes)} / ${formatBytes(group.totalBytes)}` : '-'}</span>
+                            <span>{progress > 0 ? `${progress.toFixed(1)}%` : '-'}</span>
+                          </div>
+                        </div>
+                      )}
+
                     {expanded && (
                       <>
-                        {showProgress && (
-                          <div className="transfer-progress">
-                            <div className="transfer-progress-bar">
-                              <div className="transfer-progress-fill" style={{ width: `${progress}%` }} />
-                            </div>
-                            <div className="transfer-progress-meta">
-                              <span>{group.totalBytes ? `${formatBytes(group.doneBytes)} / ${formatBytes(group.totalBytes)}` : '-'}</span>
-                              <span>{progress > 0 ? `${progress.toFixed(1)}%` : '-'}</span>
-                            </div>
-                          </div>
-                        )}
-
                         {group.message && <div className="transfer-message">{group.message}</div>}
                         {renderTransferActions(group)}
 

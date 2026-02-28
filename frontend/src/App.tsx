@@ -554,7 +554,7 @@ function App() {
           if (!Array.isArray(ids) || ids.length === 0) return;
           setTransferView('upload');
           setShowTransfers(true);
-          showToast('info', ids.length > 1 ? `Queued ${ids.length} upload tasks` : 'Queued upload task');
+          showToast('success', ids.length > 1 ? `Upload task created successfully (${ids.length} items)` : 'Upload task created successfully');
         })
         .catch((err: any) => {
           showToast('error', err?.message || 'Upload failed');
